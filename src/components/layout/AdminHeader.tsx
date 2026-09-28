@@ -22,6 +22,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
+import { useHealth } from "@/hooks/useProjects";
 
 export interface BreadcrumbItemData {
   label: string;
@@ -39,6 +40,9 @@ export function AdminHeader({
   description,
   breadcrumbs,
 }: AdminHeaderProps) {
+  const { data: health, isLoading, isError } = useHealth();
+  const isHealthy = !isLoading && !isError && health?.ready !== false;
+
   return (
     <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b bg-background/95 px-4 md:px-6 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="flex items-center gap-3 min-w-0">
@@ -94,14 +98,24 @@ export function AdminHeader({
         </div>
 
         {/* Server Status Badge */}
-        <div className="flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
-          <span className="relative flex h-2 w-2">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-          </span>
-          <span className="hidden sm:inline">Connected</span>
-          <span className="sm:hidden">Ready</span>
-        </div>
+        {isHealthy ? (
+          <div className="flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+            </span>
+            <span className="hidden sm:inline">Connected</span>
+            <span className="sm:hidden">Ready</span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1.5 rounded-full border border-red-500/20 bg-red-500/10 px-2.5 py-1 text-xs font-medium text-red-600 dark:text-red-400">
+            <span className="relative flex h-2 w-2">
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500" />
+            </span>
+            <span className="hidden sm:inline">Disconnected</span>
+            <span className="sm:hidden">Offline</span>
+          </div>
+        )}
 
         {/* User Profile Dropdown */}
         <DropdownMenu>
@@ -148,7 +162,7 @@ export function AdminHeader({
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem className="text-muted-foreground text-xs" disabled>
-              Version 0.1.0 • Connected
+              Version {health?.version || '0.1.0'} • {isHealthy ? 'Connected' : 'Disconnected'}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
