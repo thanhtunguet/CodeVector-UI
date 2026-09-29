@@ -404,6 +404,7 @@ export interface GraphRelationEdge {
   resolution: string;
   method: string;
   analyzer: string;
+  attributes?: Record<string, string>;
 }
 
 export interface DependencyGraph {
