@@ -9,9 +9,10 @@ import Projects from "@/pages/Projects";
 import ProjectDetail from "@/pages/ProjectDetail";
 import Sources from "@/pages/Sources";
 import Snapshots from "@/pages/Snapshots";
+import Retrieval from "@/pages/Retrieval";
 import NotFound from "@/pages/NotFound";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Database, History, SearchCode, Settings as SettingsIcon } from "lucide-react";
+import { Database, History, Settings as SettingsIcon } from "lucide-react";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -54,17 +55,6 @@ function ModulePlaceholder({
 }
 
 
-function RetrievalPage() {
-  return (
-    <ModulePlaceholder
-      title="Retrieval & Search"
-      description="Hybrid semantic search, symbol graph traversals, and caller/dependency blast radius analysis."
-      icon={SearchCode}
-      phase="Phase 4"
-    />
-  );
-}
-
 function SettingsPage() {
   return (
     <ModulePlaceholder
@@ -102,7 +92,7 @@ export const routes: RouteObject[] = [
       { path: "projects/:code", element: <ProjectDetail /> },
       { path: "sources", element: <Sources /> },
       { path: "snapshots", element: <Snapshots /> },
-      { path: "retrieval", element: <RetrievalPage /> },
+      { path: "retrieval", element: <Retrieval /> },
       { path: "settings", element: <SettingsPage /> },
       { path: "*", element: <NotFound /> },
     ],

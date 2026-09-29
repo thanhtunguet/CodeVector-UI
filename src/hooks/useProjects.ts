@@ -161,15 +161,29 @@ export function useHealth() {
   });
 }
 
+export {
+  useEntityDetail,
+  useEntityDependencies,
+  useEvidence,
+} from './useRetrieval';
+
 export function useSearchProject(
   code: string | undefined,
   q: string,
   type: 'symbol' | 'path' | 'semantic' = 'symbol',
-  options?: { enabled?: boolean; limit?: number }
+  options?: { enabled?: boolean; limit?: number; snapshotId?: string }
 ) {
   return useQuery<SearchResponse>({
-    queryKey: ['projects', code, 'search', q, type, options?.limit],
-    queryFn: () => searchProject(code!, { q, type, limit: options?.limit }),
+    queryKey: ['projects', code, 'search', q, type, options?.limit, options?.snapshotId],
+    queryFn: () =>
+      searchProject(code!, {
+        q,
+        type,
+        limit: options?.limit,
+        snapshotId: options?.snapshotId,
+      }),
     enabled: Boolean(code && q.trim().length > 0 && (options?.enabled ?? true)),
+    retry: false,
   });
 }
+

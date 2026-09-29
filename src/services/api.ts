@@ -256,12 +256,27 @@ export async function triggerIngest(
   });
 }
 
+export interface SearchLocation {
+  projectCode?: string;
+  sourceId?: string;
+  revision?: string;
+  path: string;
+  startByte?: number;
+  endByte?: number;
+  startLine?: number | null;
+  endLine?: number | null;
+}
+
 export interface SearchResultItem {
   id?: string;
+  entityId?: string;
   name?: string;
   kind?: string;
   path?: string;
   score?: number;
+  location?: SearchLocation;
+  diagnostics?: unknown[];
+  snapshotId?: string;
   [key: string]: unknown;
 }
 
@@ -274,15 +289,119 @@ export interface SearchResponse {
 
 export async function searchProject(
   code: string,
-  params: { q: string; type?: 'symbol' | 'path' | 'semantic'; limit?: number }
+  params: {
+    q: string;
+    type?: 'symbol' | 'path' | 'semantic';
+    limit?: number;
+    snapshotId?: string;
+  }
 ): Promise<SearchResponse> {
   const query = new URLSearchParams();
   query.set('q', params.q);
   if (params.type) query.set('type', params.type);
   if (params.limit) query.set('limit', String(params.limit));
+  if (params.snapshotId) query.set('snapshotId', params.snapshotId);
 
   return requestJson<SearchResponse>(
     `${BASE_URL}/projects/${encodeURIComponent(code)}/search?${query.toString()}`
+  );
+}
+
+export interface GraphEntityNode {
+  id: string;
+  projectCode: string;
+  sourceId: string;
+  revision: string;
+  snapshotId: string;
+  kind: string;
+  name: string;
+  qualifiedName: string | null;
+  path: string;
+  startByte: number;
+  endByte: number;
+  startLine: number | null;
+  endLine: number | null;
+  language: string;
+  unresolvedRelationCount?: number;
+}
+
+export interface GraphRelationEdge {
+  type: string;
+  source: string;
+  target: string;
+  resolution: string;
+  method: string;
+  analyzer: string;
+}
+
+export interface DependencyGraph {
+  rootEntityId: string;
+  depth: number;
+  entities: GraphEntityNode[];
+  relations: GraphRelationEdge[];
+}
+
+export interface EntityDetailResponse {
+  projectCode: string;
+  entity: GraphEntityNode;
+  incomingRelations: GraphRelationEdge[];
+  outgoingRelations: GraphRelationEdge[];
+  dependencies?: DependencyGraph;
+}
+
+export interface EvidenceResult {
+  projectCode: string;
+  snapshotId: string;
+  sourceId: string;
+  revision?: string;
+  path: string;
+  contentHash: string;
+  byteSize: number;
+  text: string;
+}
+
+export async function getEntityDetail(
+  code: string,
+  id: string,
+  options?: { snapshotId?: string; depth?: number }
+): Promise<EntityDetailResponse> {
+  const query = new URLSearchParams();
+  if (options?.snapshotId) query.set('snapshotId', options.snapshotId);
+  if (options?.depth !== undefined) query.set('depth', String(options.depth));
+
+  const qs = query.toString();
+  return requestJson<EntityDetailResponse>(
+    `${BASE_URL}/projects/${encodeURIComponent(code)}/entities/${encodeURIComponent(id)}${qs ? `?${qs}` : ''}`
+  );
+}
+
+export async function getEntityDependencies(
+  code: string,
+  id: string,
+  options?: { snapshotId?: string; depth?: number }
+): Promise<DependencyGraph> {
+  const query = new URLSearchParams();
+  if (options?.snapshotId) query.set('snapshotId', options.snapshotId);
+  if (options?.depth !== undefined) query.set('depth', String(options.depth));
+
+  const qs = query.toString();
+  return requestJson<DependencyGraph>(
+    `${BASE_URL}/projects/${encodeURIComponent(code)}/entities/${encodeURIComponent(id)}/dependencies${qs ? `?${qs}` : ''}`
+  );
+}
+
+export async function getEvidence(
+  code: string,
+  path: string,
+  options?: { snapshotId?: string; sourceId?: string }
+): Promise<EvidenceResult> {
+  const query = new URLSearchParams();
+  query.set('path', path);
+  if (options?.snapshotId) query.set('snapshotId', options.snapshotId);
+  if (options?.sourceId) query.set('sourceId', options.sourceId);
+
+  return requestJson<EvidenceResult>(
+    `${BASE_URL}/projects/${encodeURIComponent(code)}/evidence?${query.toString()}`
   );
 }
 
