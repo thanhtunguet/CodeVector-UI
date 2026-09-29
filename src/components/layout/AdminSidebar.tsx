@@ -70,10 +70,10 @@ export function AdminSidebar() {
             <Code2 className="h-4 w-4" />
           </div>
           <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
-            <span className="truncate font-semibold tracking-tight text-foreground">
+            <span className="truncate font-semibold tracking-tight text-sidebar-foreground">
               CodeVector
             </span>
-            <span className="truncate text-xs text-muted-foreground">
+            <span className="truncate text-xs text-sidebar-foreground/60">
               Code Intelligence
             </span>
           </div>
