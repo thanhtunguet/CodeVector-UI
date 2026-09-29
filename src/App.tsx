@@ -7,6 +7,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { AdminLayout } from "@/components/layout/AdminLayout";
 import Projects from "@/pages/Projects";
 import ProjectDetail from "@/pages/ProjectDetail";
+import Sources from "@/pages/Sources";
 import NotFound from "@/pages/NotFound";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Database, History, SearchCode, Settings as SettingsIcon } from "lucide-react";
@@ -51,16 +52,6 @@ function ModulePlaceholder({
   );
 }
 
-function SourcesPage() {
-  return (
-    <ModulePlaceholder
-      title="Ingestion & Sources"
-      description="Configure local file repositories, remote Git providers, and automated branch change watchers."
-      icon={Database}
-      phase="Phase 2"
-    />
-  );
-}
 
 function SnapshotsPage() {
   return (
@@ -119,7 +110,7 @@ export const routes: RouteObject[] = [
       { index: true, element: <Projects /> },
       { path: "projects", element: <Projects /> },
       { path: "projects/:code", element: <ProjectDetail /> },
-      { path: "sources", element: <SourcesPage /> },
+      { path: "sources", element: <Sources /> },
       { path: "snapshots", element: <SnapshotsPage /> },
       { path: "retrieval", element: <RetrievalPage /> },
       { path: "settings", element: <SettingsPage /> },

@@ -119,11 +119,27 @@ export function useProjectSnapshots(code: string | undefined) {
   });
 }
 
-export function useProjectIngestion(code: string | undefined) {
+export function useProjectIngestion(
+  code: string | undefined,
+  options?: {
+    refetchInterval?:
+      | number
+      | false
+      | ((query: import('@tanstack/react-query').Query<IngestionStatus, Error>) => number | false | undefined);
+  }
+) {
   return useQuery<IngestionStatus>({
     queryKey: ['projects', code, 'ingestion'],
     queryFn: () => getProjectIngestion(code!),
     enabled: Boolean(code),
+    refetchInterval: (query) => {
+      if (options?.refetchInterval !== undefined) {
+        return typeof options.refetchInterval === 'function'
+          ? options.refetchInterval(query)
+          : options.refetchInterval;
+      }
+      return query.state.data?.activeRun ? 2000 : false;
+    },
   });
 }
 
