@@ -88,6 +88,16 @@ export async function createProject(input: CreateProjectInput): Promise<Project>
   });
 }
 
+export async function updateProject(code: string, data: { name: string }): Promise<Project> {
+  return requestJson<Project>(`${BASE_URL}/projects/${encodeURIComponent(code)}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(data),
+  });
+}
+
 export async function deleteProject(code: string): Promise<void> {
   const res = await fetch(`${BASE_URL}/projects/${encodeURIComponent(code)}`, {
     method: 'DELETE',
@@ -96,6 +106,25 @@ export async function deleteProject(code: string): Promise<void> {
     const message = await parseError(res);
     throw new Error(message);
   }
+}
+
+export interface CreateSourceInput {
+  name: string;
+  kind: 'repository' | 'documentation';
+  locator: { type: 'local_directory'; path: string };
+}
+
+export async function createSource(
+  code: string,
+  input: CreateSourceInput
+): Promise<Source> {
+  return requestJson<Source>(`${BASE_URL}/projects/${encodeURIComponent(code)}/sources`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(input),
+  });
 }
 
 export async function getProjectSources(code: string): Promise<Source[]> {
@@ -112,9 +141,80 @@ export async function getProjectSnapshots(code: string): Promise<Snapshot[]> {
   return data.snapshots;
 }
 
+export interface CleanupSnapshotsResult {
+  deletedSnapshotIds: string[];
+  retainedSnapshotIds: string[];
+}
+
+export async function cleanupSnapshots(
+  code: string,
+  options?: { retainCount?: number }
+): Promise<CleanupSnapshotsResult> {
+  return requestJson<CleanupSnapshotsResult>(
+    `${BASE_URL}/projects/${encodeURIComponent(code)}/snapshots/cleanup`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(options ?? {}),
+    }
+  );
+}
+
 export async function getProjectIngestion(code: string): Promise<IngestionStatus> {
   return requestJson<IngestionStatus>(
     `${BASE_URL}/projects/${encodeURIComponent(code)}/ingestion`
+  );
+}
+
+export interface IngestResult {
+  runId?: string;
+  snapshotId?: string;
+  state?: string;
+  [key: string]: unknown;
+}
+
+export async function triggerIngest(
+  code: string,
+  options?: { requireSemantic?: boolean }
+): Promise<IngestResult> {
+  return requestJson<IngestResult>(`${BASE_URL}/projects/${encodeURIComponent(code)}/ingest`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(options ?? {}),
+  });
+}
+
+export interface SearchResultItem {
+  id?: string;
+  name?: string;
+  kind?: string;
+  path?: string;
+  score?: number;
+  [key: string]: unknown;
+}
+
+export interface SearchResponse {
+  projectCode: string;
+  query: string;
+  type: string;
+  results: SearchResultItem[];
+}
+
+export async function searchProject(
+  code: string,
+  params: { q: string; type?: 'symbol' | 'path' | 'semantic'; limit?: number }
+): Promise<SearchResponse> {
+  const query = new URLSearchParams();
+  query.set('q', params.q);
+  if (params.type) query.set('type', params.type);
+  if (params.limit) query.set('limit', String(params.limit));
+
+  return requestJson<SearchResponse>(
+    `${BASE_URL}/projects/${encodeURIComponent(code)}/search?${query.toString()}`
   );
 }
 

@@ -6,6 +6,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { AdminLayout } from "@/components/layout/AdminLayout";
 import Projects from "@/pages/Projects";
+import ProjectDetail from "@/pages/ProjectDetail";
 import NotFound from "@/pages/NotFound";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Database, History, SearchCode, Settings as SettingsIcon } from "lucide-react";
@@ -117,6 +118,7 @@ export const routes: RouteObject[] = [
     children: [
       { index: true, element: <Projects /> },
       { path: "projects", element: <Projects /> },
+      { path: "projects/:code", element: <ProjectDetail /> },
       { path: "sources", element: <SourcesPage /> },
       { path: "snapshots", element: <SnapshotsPage /> },
       { path: "retrieval", element: <RetrievalPage /> },

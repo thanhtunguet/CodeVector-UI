@@ -1,10 +1,12 @@
 import { useState, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   FolderGit2,
   Plus,
   Search,
   MoreHorizontal,
   Eye,
+  Edit3,
   Trash2,
   Copy,
   Check,
@@ -42,7 +44,7 @@ import { useProjects } from "@/hooks/useProjects";
 import { useToast } from "@/hooks/use-toast";
 import { CreateProjectDialog } from "@/components/projects/CreateProjectDialog";
 import { DeleteProjectDialog } from "@/components/projects/DeleteProjectDialog";
-import { ProjectDetailSheet } from "@/components/projects/ProjectDetailSheet";
+import { EditProjectSheet } from "@/components/projects/EditProjectSheet";
 import type { Project } from "@/services/api";
 import { format } from "date-fns";
 
@@ -58,10 +60,11 @@ function formatDate(dateStr?: string | null): string {
 }
 
 export function Projects() {
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [selectedDetailProject, setSelectedDetailProject] = useState<Project | null>(null);
-  const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [selectedEditProject, setSelectedEditProject] = useState<Project | null>(null);
+  const [isEditOpen, setIsEditOpen] = useState(false);
   const [selectedDeleteProject, setSelectedDeleteProject] = useState<Project | null>(null);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
@@ -93,11 +96,17 @@ export function Projects() {
   };
 
   const handleOpenDetail = (project: Project) => {
-    setSelectedDetailProject(project);
-    setIsDetailOpen(true);
+    navigate(`/projects/${project.code}`);
   };
 
-  const handleOpenDelete = (project: Project) => {
+  const handleOpenEdit = (project: Project, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setSelectedEditProject(project);
+    setIsEditOpen(true);
+  };
+
+  const handleOpenDelete = (project: Project, e?: React.MouseEvent) => {
+    e?.stopPropagation();
     setSelectedDeleteProject(project);
     setIsDeleteOpen(true);
   };
@@ -327,6 +336,13 @@ export function Projects() {
                           <Eye className="h-3.5 w-3.5" />
                           <span>View Details</span>
                         </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => handleOpenEdit(project)}
+                          className="gap-2 cursor-pointer"
+                        >
+                          <Edit3 className="h-3.5 w-3.5" />
+                          <span>Edit Project</span>
+                        </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
                           onClick={() => handleOpenDelete(project)}
@@ -351,10 +367,13 @@ export function Projects() {
         onOpenChange={setIsCreateOpen}
       />
 
-      <ProjectDetailSheet
-        project={selectedDetailProject}
-        open={isDetailOpen}
-        onOpenChange={setIsDetailOpen}
+      <EditProjectSheet
+        project={selectedEditProject}
+        open={isEditOpen}
+        onOpenChange={setIsEditOpen}
+        onSuccess={() => {
+          refetch();
+        }}
       />
 
       <DeleteProjectDialog
@@ -362,9 +381,9 @@ export function Projects() {
         open={isDeleteOpen}
         onOpenChange={setIsDeleteOpen}
         onSuccess={() => {
-          if (selectedDetailProject?.code === selectedDeleteProject?.code) {
-            setIsDetailOpen(false);
-            setSelectedDetailProject(null);
+          if (selectedEditProject?.code === selectedDeleteProject?.code) {
+            setIsEditOpen(false);
+            setSelectedEditProject(null);
           }
         }}
       />
