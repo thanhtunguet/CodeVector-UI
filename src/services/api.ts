@@ -22,6 +22,14 @@ export interface Source {
   createdAt: string;
 }
 
+export interface SnapshotRevision {
+  sourceId: string;
+  sourceName?: string;
+  revision: string;
+  manifestHash: string;
+  fileCount: number;
+}
+
 export interface Snapshot {
   id: string;
   projectCode: string;
@@ -29,13 +37,34 @@ export interface Snapshot {
   createdAt: string;
   publishedAt?: string;
   failureReason?: string;
-  indexCapability?: string;
+  indexCapability?: 'full' | 'graph_only' | 'none' | string;
+  indexCapabilityReason?: string;
+  embeddingModelId?: string;
+  embeddingDimensions?: number;
+  revisions?: SnapshotRevision[];
+}
+
+export interface IngestionRun {
+  id: string;
+  projectCode: string;
+  snapshotId: string;
+  state: 'running' | 'succeeded' | 'failed';
+  startedAt: string;
+  finishedAt?: string;
+  failureReason?: string;
+  leaseExpiresAt?: string;
+  ownerId?: string;
 }
 
 export interface IngestionStatus {
-  activeRun?: unknown;
+  projectCode?: string;
+  activeRun?: IngestionRun | null;
+  published?: Snapshot;
+  latest?: Snapshot;
   latestSnapshot?: Snapshot;
   latestSuccessfulSnapshot?: Snapshot;
+  runs?: IngestionRun[];
+  ingestionImplemented?: boolean;
 }
 
 export interface HealthReport {
@@ -141,16 +170,27 @@ export async function getProjectSnapshots(code: string): Promise<Snapshot[]> {
   return data.snapshots;
 }
 
+export async function getProjectSnapshot(code: string, snapshotId: string): Promise<Snapshot> {
+  return requestJson<Snapshot>(
+    `${BASE_URL}/projects/${encodeURIComponent(code)}/snapshots/${encodeURIComponent(snapshotId)}`
+  );
+}
+
 export interface CleanupSnapshotsResult {
+  projectCode?: string;
+  inspectedCount?: number;
+  deletedSnapshots: string[];
+  retainedSnapshots: string[];
   deletedSnapshotIds: string[];
   retainedSnapshotIds: string[];
+  deleteErrors?: string[];
 }
 
 export async function cleanupSnapshots(
   code: string,
   options?: { retainCount?: number }
 ): Promise<CleanupSnapshotsResult> {
-  return requestJson<CleanupSnapshotsResult>(
+  const data = await requestJson<Record<string, unknown>>(
     `${BASE_URL}/projects/${encodeURIComponent(code)}/snapshots/cleanup`,
     {
       method: 'POST',
@@ -160,12 +200,40 @@ export async function cleanupSnapshots(
       body: JSON.stringify(options ?? {}),
     }
   );
+  const deleted =
+    (data.deletedSnapshots as string[] | undefined) ??
+    (data.deletedSnapshotIds as string[] | undefined) ??
+    [];
+  const retained =
+    (data.retainedSnapshots as string[] | undefined) ??
+    (data.retainedSnapshotIds as string[] | undefined) ??
+    [];
+  return {
+    ...data,
+    deletedSnapshots: deleted,
+    retainedSnapshots: retained,
+    deletedSnapshotIds: deleted,
+    retainedSnapshotIds: retained,
+  };
 }
 
 export async function getProjectIngestion(code: string): Promise<IngestionStatus> {
-  return requestJson<IngestionStatus>(
+  const data = await requestJson<Record<string, unknown>>(
     `${BASE_URL}/projects/${encodeURIComponent(code)}/ingestion`
   );
+  const published =
+    (data.published as Snapshot | undefined) ??
+    (data.latestSuccessfulSnapshot as Snapshot | undefined);
+  const latest =
+    (data.latest as Snapshot | undefined) ??
+    (data.latestSnapshot as Snapshot | undefined);
+  return {
+    ...data,
+    published,
+    latest,
+    latestSuccessfulSnapshot: published,
+    latestSnapshot: latest,
+  };
 }
 
 export interface IngestResult {

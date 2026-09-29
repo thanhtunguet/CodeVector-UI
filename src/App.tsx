@@ -8,6 +8,7 @@ import { AdminLayout } from "@/components/layout/AdminLayout";
 import Projects from "@/pages/Projects";
 import ProjectDetail from "@/pages/ProjectDetail";
 import Sources from "@/pages/Sources";
+import Snapshots from "@/pages/Snapshots";
 import NotFound from "@/pages/NotFound";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Database, History, SearchCode, Settings as SettingsIcon } from "lucide-react";
@@ -52,17 +53,6 @@ function ModulePlaceholder({
   );
 }
 
-
-function SnapshotsPage() {
-  return (
-    <ModulePlaceholder
-      title="Snapshots & Runs"
-      description="Historical code intelligence snapshots, diff graphs, and semantic index versioning."
-      icon={History}
-      phase="Phase 3"
-    />
-  );
-}
 
 function RetrievalPage() {
   return (
@@ -111,7 +101,7 @@ export const routes: RouteObject[] = [
       { path: "projects", element: <Projects /> },
       { path: "projects/:code", element: <ProjectDetail /> },
       { path: "sources", element: <Sources /> },
-      { path: "snapshots", element: <SnapshotsPage /> },
+      { path: "snapshots", element: <Snapshots /> },
       { path: "retrieval", element: <RetrievalPage /> },
       { path: "settings", element: <SettingsPage /> },
       { path: "*", element: <NotFound /> },

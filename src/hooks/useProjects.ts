@@ -8,6 +8,7 @@ import {
   getProject,
   getProjectIngestion,
   getProjects,
+  getProjectSnapshot,
   getProjectSnapshots,
   getProjectSources,
   searchProject,
@@ -116,6 +117,14 @@ export function useProjectSnapshots(code: string | undefined) {
     queryKey: ['projects', code, 'snapshots'],
     queryFn: () => getProjectSnapshots(code!),
     enabled: Boolean(code),
+  });
+}
+
+export function useProjectSnapshot(code: string | undefined, snapshotId: string | undefined) {
+  return useQuery<Snapshot>({
+    queryKey: ['projects', code, 'snapshots', snapshotId],
+    queryFn: () => getProjectSnapshot(code!, snapshotId!),
+    enabled: Boolean(code && snapshotId),
   });
 }
 
