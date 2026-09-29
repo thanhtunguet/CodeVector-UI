@@ -11,8 +11,7 @@ import Sources from "@/pages/Sources";
 import Snapshots from "@/pages/Snapshots";
 import Retrieval from "@/pages/Retrieval";
 import NotFound from "@/pages/NotFound";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Database, History, Settings as SettingsIcon } from "lucide-react";
+import Settings from "@/pages/Settings";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -22,49 +21,6 @@ const queryClient = new QueryClient({
     },
   },
 });
-
-function ModulePlaceholder({
-  title,
-  description,
-  icon: Icon,
-  phase,
-}: {
-  title: string;
-  description: string;
-  icon: React.ComponentType<{ className?: string }>;
-  phase: string;
-}) {
-  return (
-    <div className="flex flex-col items-center justify-center min-h-[50vh] p-4">
-      <Card className="max-w-lg w-full text-center border-dashed">
-        <CardHeader className="space-y-3">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
-            <Icon className="h-6 w-6" />
-          </div>
-          <CardTitle className="text-xl">{title}</CardTitle>
-          <CardDescription>{description}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="inline-flex items-center rounded-full border px-3 py-1 text-xs text-muted-foreground bg-muted/40">
-            {phase} • Architecture Ready
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
-
-function SettingsPage() {
-  return (
-    <ModulePlaceholder
-      title="Settings"
-      description="Core engine connection parameters, embedding models, indexing rules, and client preferences."
-      icon={SettingsIcon}
-      phase="Phase 5"
-    />
-  );
-}
 
 export function AppProviders({ children }: { children: React.ReactNode }) {
   return (
@@ -93,7 +49,7 @@ export const routes: RouteObject[] = [
       { path: "sources", element: <Sources /> },
       { path: "snapshots", element: <Snapshots /> },
       { path: "retrieval", element: <Retrieval /> },
-      { path: "settings", element: <SettingsPage /> },
+      { path: "settings", element: <Settings /> },
       { path: "*", element: <NotFound /> },
     ],
   },

@@ -167,6 +167,8 @@ export {
   useEvidence,
 } from './useRetrieval';
 
+export { useCapabilities, useSystemHealth } from './useSettings';
+
 export function useSearchProject(
   code: string | undefined,
   q: string,

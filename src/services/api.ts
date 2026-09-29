@@ -67,12 +67,84 @@ export interface IngestionStatus {
   ingestionImplemented?: boolean;
 }
 
+export type DependencyProbeStatus = 'up' | 'down' | 'not_configured';
+
+export interface DependencyProbeReport {
+  name: string;
+  status: DependencyProbeStatus;
+  required: boolean;
+  detail?: string;
+  latencyMs?: number;
+}
+
+export interface ReadinessReport {
+  ready: boolean;
+  checkedAt: string;
+  dependencies: DependencyProbeReport[];
+}
+
+export interface LivenessReport {
+  alive: boolean;
+  uptimeSeconds: number;
+  version: string;
+}
+
 export interface HealthReport {
   ready?: boolean;
   live?: boolean;
+  alive?: boolean;
   version?: string;
-  probes?: Record<string, unknown>;
+  uptimeSeconds?: number;
+  checkedAt?: string;
+  dependencies?: DependencyProbeReport[];
+  probes?: Record<string, DependencyProbeReport>;
   [key: string]: unknown;
+}
+
+export type SystemHealthReport = HealthReport;
+
+export interface AdapterCapability {
+  language: string;
+  level?: 'syntax' | 'semantic' | 'text' | string;
+  capability?: 'syntax' | 'semantic' | 'text' | string;
+  available?: boolean;
+  extensions?: readonly string[];
+  description?: string;
+}
+
+export interface ServerCapabilities {
+  adapters: AdapterCapability[];
+  ingestion: boolean;
+  retrieval: boolean;
+}
+
+export interface ComputeWorkerCapabilityItem {
+  name: string;
+  available: boolean;
+  detail?: string;
+  config?: {
+    model?: string;
+    dimensions?: number;
+    batch_size?: number;
+    max_concurrency?: number;
+    [key: string]: unknown;
+  };
+}
+
+export interface ComputeWorkerCapabilities {
+  available?: boolean;
+  reason?: string;
+  service?: string;
+  version?: string;
+  capabilities?: ComputeWorkerCapabilityItem[];
+  modelId?: string;
+  dimensions?: number;
+  [key: string]: unknown;
+}
+
+export interface CapabilitiesReport {
+  server: ServerCapabilities;
+  computeWorker: ComputeWorkerCapabilities;
 }
 
 const BASE_URL = (import.meta.env.VITE_API_URL || '/api').replace(/\/+$/, '');
@@ -405,12 +477,81 @@ export async function getEvidence(
   );
 }
 
-export async function getHealth(): Promise<HealthReport> {
-  const res = await fetch(`${BASE_URL}/health`);
-  // 503 is returned when some dependencies are not ready, but the body still contains readiness status
+export async function getCapabilities(): Promise<CapabilitiesReport> {
+  return requestJson<CapabilitiesReport>(`${BASE_URL}/capabilities`);
+}
+
+export async function getHealthReady(): Promise<ReadinessReport> {
+  const res = await fetch(`${BASE_URL}/health/ready`);
   if (!res.ok && res.status !== 503) {
     const message = await parseError(res);
     throw new Error(message);
   }
-  return res.json() as Promise<HealthReport>;
+  return res.json() as Promise<ReadinessReport>;
+}
+
+export async function getHealthLive(): Promise<LivenessReport> {
+  return requestJson<LivenessReport>(`${BASE_URL}/health/live`);
+}
+
+export async function getSystemHealth(): Promise<SystemHealthReport> {
+  const [readinessRes, livenessRes] = await Promise.allSettled([
+    fetch(`${BASE_URL}/health/ready`),
+    fetch(`${BASE_URL}/health/live`),
+  ]);
+
+  let hasResponse = false;
+  let readiness: ReadinessReport = {
+    ready: false,
+    checkedAt: new Date().toISOString(),
+    dependencies: [],
+  };
+
+  if (readinessRes.status === 'fulfilled') {
+    const res = readinessRes.value;
+    if (res.ok || res.status === 503) {
+      try {
+        readiness = await res.json();
+        hasResponse = true;
+      } catch {
+        // Fallback
+      }
+    }
+  }
+
+  let liveness: Partial<LivenessReport> = {};
+  if (livenessRes.status === 'fulfilled' && livenessRes.value.ok) {
+    try {
+      liveness = await livenessRes.value.json();
+      hasResponse = true;
+    } catch {
+      // Fallback
+    }
+  }
+
+  if (!hasResponse) {
+    throw new Error('Unable to connect to CodeVector server');
+  }
+
+  const probes: Record<string, DependencyProbeReport> = {};
+  if (Array.isArray(readiness.dependencies)) {
+    for (const dep of readiness.dependencies) {
+      probes[dep.name] = dep;
+    }
+  }
+
+  return {
+    ready: Boolean(readiness.ready),
+    live: liveness.alive ?? true,
+    alive: liveness.alive ?? true,
+    version: liveness.version ?? '0.1.0',
+    uptimeSeconds: liveness.uptimeSeconds,
+    checkedAt: readiness.checkedAt || new Date().toISOString(),
+    dependencies: readiness.dependencies || [],
+    probes,
+  };
+}
+
+export async function getHealth(): Promise<HealthReport> {
+  return getSystemHealth();
 }
