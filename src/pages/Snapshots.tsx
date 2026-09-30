@@ -63,6 +63,7 @@ import {
 import { useProjectSelection } from "@/hooks/useSources";
 import { useToast } from "@/hooks/use-toast";
 import { SnapshotDetailSheet } from "@/components/snapshots/SnapshotDetailSheet";
+import { WorkerEventPanel } from "@/components/worker/WorkerEventPanel";
 import { CleanupSnapshotsDialog } from "@/components/snapshots/CleanupSnapshotsDialog";
 import type { Snapshot } from "@/services/api";
 import { format } from "date-fns";
@@ -725,6 +726,15 @@ export function Snapshots() {
           )}
         </CardContent>
       </Card>
+
+      {selectedCode && ingestion?.activeRun && (
+        <WorkerEventPanel
+          projectCode={selectedCode}
+          runId={ingestion.activeRun.id}
+          activeRun={ingestion.activeRun}
+          title="Active ingestion worker log"
+        />
+      )}
 
       {/* Slide-over Inspection Sheet */}
       <SnapshotDetailSheet

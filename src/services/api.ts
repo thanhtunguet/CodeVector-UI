@@ -48,12 +48,23 @@ export interface IngestionRun {
   id: string;
   projectCode: string;
   snapshotId: string;
-  state: 'running' | 'succeeded' | 'failed';
+  state: 'running' | 'succeeded' | 'failed' | 'cancelled';
   startedAt: string;
   finishedAt?: string;
   failureReason?: string;
   leaseExpiresAt?: string;
   ownerId?: string;
+  stage?: string;
+  completedUnits?: number;
+  totalUnits?: number;
+  currentEmbeddingJobId?: string;
+  currentEmbeddingJobState?: string;
+  currentEmbeddingAttempt?: number;
+  currentEmbeddingCompleted?: number;
+  currentEmbeddingTotal?: number;
+  lastEmbeddingObservedAt?: string;
+  embeddingCommunicationFailures?: number;
+  cancelRequestedAt?: string;
 }
 
 export interface IngestionStatus {

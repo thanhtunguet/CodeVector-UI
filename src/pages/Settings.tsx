@@ -61,6 +61,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useCapabilities, useSystemHealth } from '@/hooks/useSettings';
 import { useToast } from '@/hooks/use-toast';
+import { WorkerEventPanel } from '@/components/worker/WorkerEventPanel';
 import type {
   AdapterCapability,
   DependencyProbeReport,
@@ -495,6 +496,8 @@ export default function Settings() {
             isLoading={isCapLoading}
           />
 
+          <WorkerEventPanel title="Worker-wide event history" compact />
+
           <RuntimeSection health={health} isLoading={isHealthLoading} />
         </TabsContent>
 
@@ -526,6 +529,7 @@ export default function Settings() {
             reason={computeWorkerReason}
             isLoading={isCapLoading}
           />
+          <WorkerEventPanel title="Worker-wide event history" compact />
         </TabsContent>
 
         {/* TAB: Runtime & Environment */}

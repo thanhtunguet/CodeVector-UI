@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useProjectSnapshot } from "@/hooks/useProjects";
+import { WorkerEventPanel } from "@/components/worker/WorkerEventPanel";
 import type { Snapshot } from "@/services/api";
 import { format } from "date-fns";
 import {
@@ -396,6 +397,14 @@ export function SnapshotDetailSheet({
                 )}
               </div>
             </>
+          )}
+          {activeSnapshot && (
+            <WorkerEventPanel
+              projectCode={projectCode}
+              snapshotId={activeSnapshot.id}
+              title="Worker history for this snapshot"
+              compact
+            />
           )}
         </div>
 
