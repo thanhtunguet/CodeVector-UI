@@ -126,6 +126,13 @@ const KNOWN_ADAPTERS: Record<string, KnownAdapterMeta> = {
     defaultLevel: 'syntax',
     icon: Code2,
   },
+  bash: {
+    name: 'Bash / Shell',
+    extensions: ['.sh', '.bash', '.bats'],
+    description: 'Shell functions, variables, source dependencies, and command references.',
+    defaultLevel: 'semantic',
+    icon: Terminal,
+  },
   markdown: {
     name: 'Markdown',
     extensions: ['.md', '.markdown', '.mdx'],
