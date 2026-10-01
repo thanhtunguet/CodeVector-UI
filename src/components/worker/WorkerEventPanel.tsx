@@ -21,6 +21,22 @@ function mergeEvents(current: WorkerEvent[], incoming: WorkerEvent[]): WorkerEve
   return [...events.values()].sort((left, right) => BigInt(left.cursor) < BigInt(right.cursor) ? -1 : 1);
 }
 
+/**
+ * The server now tails live events and serves history as bounded pages, so this
+ * panel cannot accumulate the whole ledger. When more than one event arrives in
+ * a burst, the live stream is treated as a "history changed" signal: the next
+ * poll takes the finite-page path instead of trying to render the burst. The
+ * rendered list is capped to the newest `MAX_RENDERED_EVENTS` for the same
+ * reason.
+ */
+const MAX_RENDERED_EVENTS = 500;
+const MAX_BURST_EVENTS = 1;
+
+function capEvents(events: WorkerEvent[]): WorkerEvent[] {
+  if (events.length <= MAX_RENDERED_EVENTS) return events;
+  return events.slice(events.length - MAX_RENDERED_EVENTS);
+}
+
 function eventTone(level: WorkerEvent['level']): string {
   if (level === 'error') return 'text-destructive';
   if (level === 'warn') return 'text-amber-600 dark:text-amber-400';
@@ -63,7 +79,7 @@ export function WorkerEventPanel({
 
     const addEvents = (incoming: WorkerEvent[]) => {
       if (disposed || incoming.length === 0) return;
-      setEvents((current) => mergeEvents(current, incoming));
+      setEvents((current) => capEvents(mergeEvents(current, incoming)));
       for (const event of incoming) {
         if (BigInt(event.cursor) > BigInt(newestCursor.current)) newestCursor.current = event.cursor;
         if (!oldestCursor.current || BigInt(event.cursor) < BigInt(oldestCursor.current)) {
@@ -108,7 +124,21 @@ export function WorkerEventPanel({
         });
         stream.addEventListener('worker-event', (message) => {
           try {
-            addEvents([JSON.parse((message as MessageEvent<string>).data) as WorkerEvent]);
+            const event = JSON.parse((message as MessageEvent<string>).data) as WorkerEvent;
+            // One event at a time is the live tail. A burst means the stream
+            // outran the UI budget; stop rendering it and let the finite pages
+            // catch up, so the panel never grows past its cap.
+            if (event.cursor === newestCursor.current) return;
+            if (newestCursor.current !== '0' && BigInt(event.cursor) - BigInt(newestCursor.current) > MAX_BURST_EVENTS) {
+              stream?.close();
+              if (!disposed) {
+                setStreaming(false);
+                pollTimer = setInterval(() => void poll(), 3_000);
+                void poll();
+              }
+              return;
+            }
+            addEvents([event]);
           } catch {
             // Ignore malformed stream frames; polling remains a recovery path.
           }

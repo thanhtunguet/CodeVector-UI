@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   Sheet,
   SheetContent,
@@ -71,6 +71,20 @@ export function SnapshotDetailSheet({
   );
 
   const activeSnapshot = fetchedSnapshot ?? snapshot;
+
+  // Serialize once per snapshot change and only while the inspector is open, so
+  // re-renders do not re-stringify the payload. Snapshot revisions can carry a
+  // manifest hash per file, so the result is capped: the inspector is a debug
+  // aid, not a reason to build an unbounded string in the browser heap.
+  const rawSnapshotJson = useMemo(() => {
+    if (!activeSnapshot || !showRawJson) return '';
+    const serialized = JSON.stringify(activeSnapshot, null, 2);
+    if (serialized === undefined) return '';
+    const limit = 200_000;
+    return serialized.length > limit
+      ? `${serialized.slice(0, limit)}\n… truncated ${serialized.length - limit} characters`
+      : serialized;
+  }, [activeSnapshot, showRawJson]);
 
   const handleCopyId = () => {
     if (!activeSnapshot?.id) return;
@@ -390,8 +404,8 @@ export function SnapshotDetailSheet({
                 </button>
                 {showRawJson && (
                   <div className="p-3 border-t bg-muted/50 overflow-x-auto">
-                    <pre className="text-[11px] font-mono leading-relaxed text-muted-foreground whitespace-pre">
-                      {JSON.stringify(activeSnapshot, null, 2)}
+                    <pre className="text-[11px] font-mono leading-relaxed text-muted-foreground whitespace-pre-wrap break-words">
+                      {rawSnapshotJson}
                     </pre>
                   </div>
                 )}

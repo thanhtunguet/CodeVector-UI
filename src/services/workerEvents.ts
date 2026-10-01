@@ -1,3 +1,5 @@
+import { parseJsonResponse } from './api';
+
 export interface WorkerEvent {
   cursor: string;
   occurredAt: string;
@@ -34,13 +36,9 @@ function endpoint(projectCode?: string, runId?: string, snapshotId?: string): st
 }
 
 async function responseError(response: Response): Promise<Error> {
-  try {
-    const data: unknown = await response.json();
-    if (data && typeof data === 'object' && 'error' in data && typeof data.error === 'string') {
-      return new Error(data.error);
-    }
-  } catch {
-    // Keep a status-based message for non-JSON errors.
+  const data = await parseJsonResponse<{ error?: unknown }>(response);
+  if (data && typeof data === 'object' && 'error' in data && typeof data.error === 'string') {
+    return new Error(data.error);
   }
   return new Error(`Worker events request failed (${response.status})`);
 }
@@ -55,7 +53,9 @@ export async function getWorkerEvents(
   url.searchParams.set('limit', String(options.limit ?? 50));
   const response = await fetch(url.toString());
   if (!response.ok) throw await responseError(response);
-  return response.json() as Promise<WorkerEventPage>;
+  const page = await parseJsonResponse<WorkerEventPage>(response);
+  if (page === undefined) throw new Error('The worker event response could not be read');
+  return page;
 }
 
 export function workerEventStreamUrl(scope: {

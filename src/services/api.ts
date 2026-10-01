@@ -160,14 +160,51 @@ export interface CapabilitiesReport {
 
 const BASE_URL = (import.meta.env.VITE_API_URL || '/api').replace(/\/+$/, '');
 
-async function parseError(res: Response): Promise<string> {
+/**
+ * A dev proxy that cannot reach the API answers with the client's own
+ * index.html, and an unguarded `res.json()` would then throw on HTML. Reading
+ * the body as text first also lets us cap how much we are willing to parse: a
+ * multi-hundred-megabyte payload must fail cleanly instead of exhausting the
+ * JavaScript heap during `JSON.parse` (the failure mode a streaming server or a
+ * giant diagnostic blob otherwise triggers).
+ */
+const MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
+
+const oversizeMessage = 'The server response was too large to display';
+
+async function readBody(res: Response): Promise<string | undefined> {
+  const declared = Number(res.headers.get('content-length') ?? Number.NaN);
+  if (Number.isFinite(declared) && declared > MAX_RESPONSE_BYTES) return undefined;
+  const body = await res.text();
+  return body.length > MAX_RESPONSE_BYTES ? undefined : body;
+}
+
+function parseJson<T>(body: string): T | undefined {
   try {
-    const data = await res.json();
-    if (data && typeof data === 'object' && 'error' in data && typeof data.error === 'string') {
-      return data.error;
-    }
+    const data: unknown = JSON.parse(body);
+    return data as T;
   } catch {
-    // Non-JSON response
+    return undefined;
+  }
+}
+
+/**
+ * Parses a JSON body, returning `undefined` for empty responses, non-JSON
+ * bodies (HTML error pages) and oversized payloads. Callers use this instead of
+ * `res.json()` so a proxy or infrastructure error surfaces as a normal message.
+ */
+export async function parseJsonResponse<T>(res: Response): Promise<T | undefined> {
+  const body = await readBody(res);
+  return body === undefined ? undefined : parseJson<T>(body);
+}
+
+async function parseError(res: Response): Promise<string> {
+  const data = await parseJsonResponse<{ error?: unknown }>(res);
+  if (data && typeof data === 'object' && 'error' in data && typeof data.error === 'string') {
+    return data.error;
+  }
+  if (res.status === 502 || res.status === 503 || res.status === 504) {
+    return `The API server is unreachable (status ${res.status})`;
   }
   return `Request failed with status ${res.status}`;
 }
@@ -178,7 +215,9 @@ async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
     const message = await parseError(res);
     throw new Error(message);
   }
-  return res.json() as Promise<T>;
+  const data = await parseJsonResponse<T>(res);
+  if (data === undefined) throw new Error(oversizeMessage);
+  return data;
 }
 
 export async function getProjects(): Promise<Project[]> {
@@ -499,7 +538,9 @@ export async function getHealthReady(): Promise<ReadinessReport> {
     const message = await parseError(res);
     throw new Error(message);
   }
-  return res.json() as Promise<ReadinessReport>;
+  const data = await parseJsonResponse<ReadinessReport>(res);
+  if (data === undefined) throw new Error(oversizeMessage);
+  return data;
 }
 
 export async function getHealthLive(): Promise<LivenessReport> {
@@ -522,22 +563,20 @@ export async function getSystemHealth(): Promise<SystemHealthReport> {
   if (readinessRes.status === 'fulfilled') {
     const res = readinessRes.value;
     if (res.ok || res.status === 503) {
-      try {
-        readiness = await res.json();
+      const parsed = await parseJsonResponse<ReadinessReport>(res);
+      if (parsed !== undefined) {
+        readiness = parsed;
         hasResponse = true;
-      } catch {
-        // Fallback
       }
     }
   }
 
   let liveness: Partial<LivenessReport> = {};
   if (livenessRes.status === 'fulfilled' && livenessRes.value.ok) {
-    try {
-      liveness = await livenessRes.value.json();
+    const parsed = await parseJsonResponse<Partial<LivenessReport>>(livenessRes.value);
+    if (parsed !== undefined) {
+      liveness = parsed;
       hasResponse = true;
-    } catch {
-      // Fallback
     }
   }
 
