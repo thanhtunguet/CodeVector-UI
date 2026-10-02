@@ -298,6 +298,17 @@ export async function getProjectSnapshot(code: string, snapshotId: string): Prom
   );
 }
 
+export async function deleteSnapshot(code: string, snapshotId: string): Promise<void> {
+  const res = await fetch(
+    `${BASE_URL}/projects/${encodeURIComponent(code)}/snapshots/${encodeURIComponent(snapshotId)}`,
+    { method: 'DELETE' }
+  );
+  if (!res.ok) {
+    const message = await parseError(res);
+    throw new Error(message);
+  }
+}
+
 export interface CleanupSnapshotsResult {
   projectCode?: string;
   inspectedCount?: number;

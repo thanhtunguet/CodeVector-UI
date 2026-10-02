@@ -14,6 +14,7 @@ import {
   searchProject,
   triggerIngest,
   updateProject,
+  deleteSnapshot,
   type CleanupSnapshotsResult,
   type CreateProjectInput,
   type CreateSourceInput,
@@ -97,6 +98,17 @@ export function useCleanupSnapshots() {
   const queryClient = useQueryClient();
   return useMutation<CleanupSnapshotsResult, Error, { code: string; retainCount?: number }>({
     mutationFn: ({ code, retainCount }) => cleanupSnapshots(code, { retainCount }),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['projects', variables.code, 'snapshots'] });
+      queryClient.invalidateQueries({ queryKey: ['projects', variables.code, 'ingestion'] });
+    },
+  });
+}
+
+export function useDeleteSnapshot() {
+  const queryClient = useQueryClient();
+  return useMutation<void, Error, { code: string; snapshotId: string }>({
+    mutationFn: ({ code, snapshotId }) => deleteSnapshot(code, snapshotId),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['projects', variables.code, 'snapshots'] });
       queryClient.invalidateQueries({ queryKey: ['projects', variables.code, 'ingestion'] });

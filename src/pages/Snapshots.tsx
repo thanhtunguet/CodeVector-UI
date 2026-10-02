@@ -20,6 +20,7 @@ import {
   Layers,
   Activity,
   Trash2,
+  MoreHorizontal,
   SlidersHorizontal,
   ExternalLink,
   Cpu,
@@ -55,8 +56,25 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  useDeleteSnapshot,
   useProjectIngestion,
   useProjectSnapshots,
 } from "@/hooks/useProjects";
@@ -109,6 +127,7 @@ export function Snapshots() {
   // Modal / Sheet State
   const [isCleanupOpen, setIsCleanupOpen] = useState(false);
   const [selectedSnapshot, setSelectedSnapshot] = useState<Snapshot | null>(null);
+  const [snapshotToDelete, setSnapshotToDelete] = useState<Snapshot | null>(null);
   const [isDetailSheetOpen, setIsDetailSheetOpen] = useState(false);
 
   // Queries
@@ -125,6 +144,7 @@ export function Snapshots() {
     isRefetching: isIngestionRefetching,
     refetch: refetchIngestion,
   } = useProjectIngestion(selectedCode || undefined);
+  const deleteSnapshotMutation = useDeleteSnapshot();
 
   const isRefreshing = isSnapshotsRefetching || isIngestionRefetching;
 
@@ -151,6 +171,30 @@ export function Snapshots() {
   const handleInspectSnapshot = (snapshot: Snapshot) => {
     setSelectedSnapshot(snapshot);
     setIsDetailSheetOpen(true);
+  };
+
+  const handleDeleteSnapshot = async () => {
+    if (!selectedCode || !snapshotToDelete) return;
+
+    try {
+      await deleteSnapshotMutation.mutateAsync({
+        code: selectedCode,
+        snapshotId: snapshotToDelete.id,
+      });
+
+      toast({
+        title: "Snapshot Deleted",
+        description: `Snapshot ${snapshotToDelete.id} was permanently removed.`,
+      });
+      setSnapshotToDelete(null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to delete snapshot.";
+      toast({
+        variant: "destructive",
+        title: "Deletion Failed",
+        description: message,
+      });
+    }
   };
 
   // Stats calculation
@@ -706,16 +750,40 @@ export function Snapshots() {
                         </TableCell>
 
                         {/* Actions */}
-                        <TableCell className="py-3 text-right pr-6">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleInspectSnapshot(snap)}
-                            className="h-7 px-2.5 text-xs gap-1"
-                          >
-                            <ExternalLink className="h-3 w-3" />
-                            Inspect
-                          </Button>
+                        <TableCell className="py-3 text-right pr-6" onClick={(event) => event.stopPropagation()}>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+                              >
+                                <MoreHorizontal className="h-4 w-4" />
+                                <span className="sr-only">Open snapshot actions</span>
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-40 text-xs">
+                              <DropdownMenuItem
+                                onClick={() => handleInspectSnapshot(snap)}
+                                className="gap-2 cursor-pointer"
+                              >
+                                <ExternalLink className="h-3.5 w-3.5" />
+                                <span>Inspect</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => setSnapshotToDelete(snap)}
+                                disabled={snap.state === "published" || snap.state === "building"}
+                                className="gap-2 text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                                <span>
+                                  {snap.state === "published" || snap.state === "building"
+                                    ? "Delete unavailable"
+                                    : "Delete Snapshot"}
+                                </span>
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </TableCell>
                       </TableRow>
                     );
@@ -755,6 +823,54 @@ export function Snapshots() {
           refetchIngestion();
         }}
       />
+
+      <AlertDialog
+        open={Boolean(snapshotToDelete)}
+        onOpenChange={(open) => {
+          if (!open) setSnapshotToDelete(null);
+        }}
+      >
+        <AlertDialogContent className="sm:max-w-[460px]">
+          <AlertDialogHeader>
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+                <Trash2 className="h-5 w-5" />
+              </div>
+              <div>
+                <AlertDialogTitle className="text-base font-semibold">
+                  Delete Snapshot
+                </AlertDialogTitle>
+                <AlertDialogDescription className="text-xs text-muted-foreground mt-0.5">
+                  This removes the snapshot record and its stored index scopes.
+                </AlertDialogDescription>
+              </div>
+            </div>
+          </AlertDialogHeader>
+
+          <div className="py-2 text-sm text-foreground/90">
+            <p>
+              Are you sure you want to delete snapshot{' '}
+              <span className="font-mono font-semibold text-foreground">{snapshotToDelete?.id}</span>?
+            </p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              This action is irreversible for failed or stale snapshots and cannot be used on the active published or building snapshot.
+            </p>
+          </div>
+
+          <AlertDialogFooter className="gap-2 sm:gap-0">
+            <AlertDialogCancel disabled={deleteSnapshotMutation.isPending} className="h-9 text-xs">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteSnapshot}
+              disabled={deleteSnapshotMutation.isPending}
+              className="h-9 text-xs bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteSnapshotMutation.isPending ? "Deleting..." : "Delete Snapshot"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
