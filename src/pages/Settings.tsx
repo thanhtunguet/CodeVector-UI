@@ -129,6 +129,30 @@ const KNOWN_ADAPTERS: Record<string, KnownAdapterMeta> = {
     defaultLevel: 'syntax',
     icon: Code2,
   },
+  sql: {
+    name: 'SQL',
+    extensions: ['.sql'],
+    description:
+      'Dialect-aware parsing and indexing of SQL statements across MySQL, T-SQL, PostgreSQL, Oracle, DB2, and SQLite. Records syntax and source locations without claiming schema or execution semantics.',
+    defaultLevel: 'syntax',
+    icon: Database,
+  },
+  ruby: {
+    name: 'Ruby',
+    extensions: ['.rb', '.rake', '.gemspec', 'Gemfile', 'Rakefile', 'config.ru'],
+    description:
+      'Prism AST analysis of classes, modules, methods, constants, and conservative reference resolution within captured project files.',
+    defaultLevel: 'semantic',
+    icon: FileCode2,
+  },
+  makefile: {
+    name: 'Makefile',
+    extensions: ['.mk', 'Makefile', 'makefile', 'GNUmakefile'],
+    description:
+      'Extracts targets, prerequisites, variables, includes, and recipes, resolving only static relationships from captured files; runtime Make evaluation stays unresolved.',
+    defaultLevel: 'semantic',
+    icon: Code2,
+  },
   bash: {
     name: 'Bash / Shell',
     extensions: ['.sh', '.bash', '.bats'],
@@ -466,7 +490,7 @@ export default function Settings() {
               )}
             </div>
             <p className="text-xs text-muted-foreground mt-1.5">
-              TypeScript, Python, Go, C#, C/C++, PHP, Rust
+              {adapterList.map((adapter) => adapter.name).join(', ')}
             </p>
           </CardContent>
         </Card>
