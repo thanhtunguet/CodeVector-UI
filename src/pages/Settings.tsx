@@ -3,6 +3,7 @@ import {
   Activity,
   AlertCircle,
   AlertTriangle,
+  Binary,
   Bot,
   Check,
   CheckCircle2,
@@ -16,6 +17,7 @@ import {
   FileCode2,
   FileText,
   Globe,
+  Hash,
   Info,
   Layers,
   Network,
@@ -134,6 +136,54 @@ const KNOWN_ADAPTERS: Record<string, KnownAdapterMeta> = {
     defaultLevel: 'semantic',
     icon: Terminal,
   },
+  csharp: {
+    name: 'C#',
+    extensions: ['.cs'],
+    description:
+      'Roslyn analyzer semantic engine parsing syntax trees, type symbols, inheritance hierarchies, and call graphs.',
+    defaultLevel: 'semantic',
+    icon: Hash,
+  },
+  cpp: {
+    name: 'C++',
+    extensions: ['.cpp', '.cc', '.cxx', '.c++', '.hpp', '.hh', '.hxx', '.h++', '.inl', '.tpp', '.ipp', '.h'],
+    description:
+      'Full AST parsing via Lezer C++ parser, class/struct hierarchies, method definitions, macro extractions, and include dependency traversal.',
+    defaultLevel: 'semantic',
+    icon: Code2,
+  },
+  c: {
+    name: 'C',
+    extensions: ['.c', '.h'],
+    description:
+      'C syntax and AST analysis, struct/union symbol mapping, function declarations, and header include graph indexing.',
+    defaultLevel: 'semantic',
+    icon: Code2,
+  },
+  php: {
+    name: 'PHP',
+    extensions: ['.php', '.phtml', '.inc'],
+    description:
+      'Glayzzle PHP parser AST analysis, namespace resolution, class/trait hierarchies, method calls, and Composer autoloading mapping.',
+    defaultLevel: 'semantic',
+    icon: FileCode2,
+  },
+  rust: {
+    name: 'Rust',
+    extensions: ['.rs'],
+    description:
+      'Lezer Rust AST traversal, struct/enum definitions, trait implementations, module hierarchies, and macro symbol indexing.',
+    defaultLevel: 'semantic',
+    icon: Binary,
+  },
+  visualbasic: {
+    name: 'Visual Basic',
+    extensions: ['.vb', '.vbp', '.frm', '.bas', '.cls', '.ctl', '.vbproj', '.sln'],
+    description:
+      'Roslyn VB.NET compiler parser and dedicated VB6 grammar analyzer for legacy project membership and symbol extraction.',
+    defaultLevel: 'semantic',
+    icon: FileCode,
+  },
   markdown: {
     name: 'Markdown',
     extensions: ['.md', '.markdown', '.mdx'],
@@ -249,10 +299,7 @@ export default function Settings() {
   const adapterList = useMemo(() => {
     const serverAdapters = capabilities?.server?.adapters || [];
     const keys = new Set([
-      'typescript',
-      'python',
-      'go',
-      'markdown',
+      ...Object.keys(KNOWN_ADAPTERS),
       ...serverAdapters.map((a) => a.language.toLowerCase()),
     ]);
 
@@ -419,7 +466,7 @@ export default function Settings() {
               )}
             </div>
             <p className="text-xs text-muted-foreground mt-1.5">
-              TypeScript, Python, Go, Markdown
+              TypeScript, Python, Go, C#, C/C++, PHP, Rust
             </p>
           </CardContent>
         </Card>
