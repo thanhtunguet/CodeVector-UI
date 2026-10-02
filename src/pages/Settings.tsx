@@ -129,6 +129,14 @@ const KNOWN_ADAPTERS: Record<string, KnownAdapterMeta> = {
     defaultLevel: 'syntax',
     icon: Code2,
   },
+  java: {
+    name: 'Java',
+    extensions: ['.java'],
+    description:
+      'java-parser CST analysis of packages, types, and members, with conservative import, type, and inheritance linking within captured source files and candidate targets for method calls.',
+    defaultLevel: 'semantic',
+    icon: Code2,
+  },
   sql: {
     name: 'SQL',
     extensions: ['.sql'],
