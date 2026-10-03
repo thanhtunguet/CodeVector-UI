@@ -227,6 +227,24 @@ const KNOWN_ADAPTERS: Record<string, KnownAdapterMeta> = {
     defaultLevel: 'semantic',
     icon: FileCode,
   },
+  cobol: {
+    name: 'COBOL',
+    languages: ['cobol', 'cob', 'cbl'],
+    extensions: ['.cbl', '.cob', '.cobol', '.cpy'],
+    description:
+      'Position-preserving parser for ANSI/IBM fixed reference and free format source, extracting programs, sections, paragraphs, and data items with conservative captured-source linking for PERFORM, CALL, COPY, and data references.',
+    defaultLevel: 'semantic',
+    icon: FileCode,
+  },
+  perl: {
+    name: 'Perl',
+    languages: ['perl', 'pl'],
+    extensions: ['.pl', '.pm', '.t', '.psgi', '.plx'],
+    description:
+      'Tree-sitter static analysis of packages, subroutines, imports, and calls with conservative lexical and package scope linking within captured source files.',
+    defaultLevel: 'semantic',
+    icon: FileCode2,
+  },
   markdown: {
     name: 'Markdown',
     extensions: ['.md', '.markdown', '.mdx'],
