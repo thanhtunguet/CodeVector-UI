@@ -147,6 +147,14 @@ const KNOWN_ADAPTERS: Record<string, KnownAdapterMeta> = {
     defaultLevel: 'semantic',
     icon: Code2,
   },
+  swift: {
+    name: 'Swift',
+    extensions: ['.swift'],
+    description:
+      'Tree-sitter analysis of Swift declarations, types, and calls with conservative links within captured source. Imports, dynamic dispatch, and overload selection remain unresolved; build settings are not evaluated.',
+    defaultLevel: 'semantic',
+    icon: Code2,
+  },
   sql: {
     name: 'SQL',
     extensions: ['.sql'],
