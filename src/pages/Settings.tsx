@@ -98,6 +98,7 @@ function formatCheckTime(isoString?: string): string {
 
 interface KnownAdapterMeta {
   name: string;
+  languages?: string[];
   extensions: string[];
   description: string;
   defaultLevel: 'syntax' | 'semantic' | 'text';
@@ -106,7 +107,8 @@ interface KnownAdapterMeta {
 
 const KNOWN_ADAPTERS: Record<string, KnownAdapterMeta> = {
   typescript: {
-    name: 'TypeScript / JavaScript',
+    name: 'TypeScript/JavaScript',
+    languages: ['typescript', 'javascript'],
     extensions: ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'],
     description:
       'Full AST traversal, symbol extraction, import resolution, and call graph analysis via TypeScript compiler.',
@@ -185,18 +187,11 @@ const KNOWN_ADAPTERS: Record<string, KnownAdapterMeta> = {
     icon: Hash,
   },
   cpp: {
-    name: 'C++',
-    extensions: ['.cpp', '.cc', '.cxx', '.c++', '.hpp', '.hh', '.hxx', '.h++', '.inl', '.tpp', '.ipp', '.h'],
+    name: 'C/C++',
+    languages: ['cpp', 'c'],
+    extensions: ['.c', '.cpp', '.cc', '.cxx', '.c++', '.hpp', '.hh', '.hxx', '.h++', '.inl', '.tpp', '.ipp', '.h'],
     description:
-      'Full AST parsing via Lezer C++ parser, class/struct hierarchies, method definitions, macro extractions, and include dependency traversal.',
-    defaultLevel: 'semantic',
-    icon: Code2,
-  },
-  c: {
-    name: 'C',
-    extensions: ['.c', '.h'],
-    description:
-      'C syntax and AST analysis, struct/union symbol mapping, function declarations, and header include graph indexing.',
+      'C and C++ AST parsing via the shared Lezer C++ analyzer, class/struct/union symbols, function and method definitions, macro extraction, and header include dependency traversal.',
     defaultLevel: 'semantic',
     icon: Code2,
   },
@@ -335,27 +330,39 @@ export default function Settings() {
     capabilities?.computeWorker?.reason ||
     (computeProbe?.detail ?? (computeWorkerAvailable ? undefined : 'Compute worker unreachable or unconfigured'));
 
-  // Normalized adapter list
+  // Group language capabilities by their shared analyzer.
   const adapterList = useMemo(() => {
     const serverAdapters = capabilities?.server?.adapters || [];
+    const analyzerKey = (language: string) => {
+      const languageKey = language.toLowerCase();
+      return Object.keys(KNOWN_ADAPTERS).find((key) =>
+        (KNOWN_ADAPTERS[key].languages || [key]).includes(languageKey)
+      ) || languageKey;
+    };
     const keys = new Set([
       ...Object.keys(KNOWN_ADAPTERS),
-      ...serverAdapters.map((a) => a.language.toLowerCase()),
+      ...serverAdapters.map((a) => analyzerKey(a.language)),
     ]);
 
-    return Array.from(keys).map((langKey) => {
-      const serverEntry = serverAdapters.find((a) => a.language.toLowerCase() === langKey);
-      const known = KNOWN_ADAPTERS[langKey];
+    return Array.from(keys).map((key) => {
+      const serverEntries = serverAdapters.filter((a) => analyzerKey(a.language) === key);
+      const serverEntry = serverEntries[0];
+      const known = KNOWN_ADAPTERS[key];
+      const levels = serverEntries.map((entry) => entry.level || entry.capability || known?.defaultLevel || 'syntax');
+      const level = levels.includes('text') ? 'text' : levels.includes('syntax') ? 'syntax' : levels[0];
       return {
-        id: langKey,
-        name: known?.name || serverEntry?.language || langKey.toUpperCase(),
-        level: (serverEntry?.level || serverEntry?.capability || known?.defaultLevel || 'syntax') as
+        id: key,
+        name: known?.name || serverEntry?.language || key.toUpperCase(),
+        level: (level || known?.defaultLevel || 'syntax') as
           | 'syntax'
           | 'semantic'
           | 'text',
-        extensions: serverEntry?.extensions || known?.extensions || [],
-        description: serverEntry?.description || known?.description || 'Code syntax parser and symbol extractor.',
-        available: serverEntry ? serverEntry.available !== false : true,
+        extensions: Array.from(new Set(serverEntries.length
+          ? serverEntries.flatMap((entry) => entry.extensions || known?.extensions || [])
+          : known?.extensions || [])),
+        description: Array.from(new Set(serverEntries.map((entry) => entry.description).filter(Boolean))).join(' ') ||
+          known?.description || 'Code syntax parser and symbol extractor.',
+        available: serverEntries.every((entry) => entry.available !== false),
         Icon: known?.icon || FileCode,
       };
     });
@@ -407,7 +414,7 @@ export default function Settings() {
             )}
           </div>
           <p className="text-sm text-muted-foreground max-w-3xl">
-            Monitor cluster readiness, probe individual subsystem latency, verify language adapter
+            Monitor cluster readiness, probe individual subsystem latency, verify analyzer
             capabilities, and review compute worker configurations.
           </p>
         </div>
@@ -489,11 +496,11 @@ export default function Settings() {
           </CardContent>
         </Card>
 
-        {/* Language Adapters */}
+        {/* Analyzers */}
         <Card className="shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Language Adapters
+              Analyzers
             </CardTitle>
             <Code2 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
@@ -550,7 +557,7 @@ export default function Settings() {
             Infrastructure Probes
           </TabsTrigger>
           <TabsTrigger value="adapters" className="text-xs py-1.5">
-            Language Adapters
+            Analyzers
           </TabsTrigger>
           <TabsTrigger value="compute" className="text-xs py-1.5">
             Compute AI Worker
@@ -600,7 +607,7 @@ export default function Settings() {
           />
         </TabsContent>
 
-        {/* TAB: Language Adapters */}
+        {/* TAB: Analyzers */}
         <TabsContent value="adapters" className="space-y-6 mt-0">
           <AdaptersSection adapters={adapterList} isLoading={isCapLoading} />
         </TabsContent>
@@ -850,7 +857,7 @@ function ProbesSection({
 }
 
 // ---------------------------------------------------------------------------
-// SUBSECTION: Language Adapter Registry
+// SUBSECTION: Analyzer Registry
 // ---------------------------------------------------------------------------
 
 function CapabilityLevelBadge({ level }: { level: 'syntax' | 'semantic' | 'text' | string }) {
@@ -896,7 +903,7 @@ function AdaptersSection({
         <div>
           <h2 className="text-lg font-semibold tracking-tight text-foreground flex items-center gap-2">
             <Code2 className="h-4 w-4 text-primary" />
-            Language Adapter Registry
+            Analyzer Registry
           </h2>
           <p className="text-xs text-muted-foreground">
             Registered AST parsers, language frontends, and text chunkers configured in the ingestion engine.
@@ -913,7 +920,7 @@ function AdaptersSection({
         <Table>
           <TableHeader className="bg-muted/40">
             <TableRow>
-              <TableHead className="w-[200px]">Adapter / Language</TableHead>
+              <TableHead className="w-[200px]">Analyzer</TableHead>
               <TableHead className="w-[140px]">Capability</TableHead>
               <TableHead className="w-[240px]">Supported Extensions</TableHead>
               <TableHead>Ingestion Analysis Role</TableHead>
