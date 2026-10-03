@@ -137,6 +137,14 @@ const KNOWN_ADAPTERS: Record<string, KnownAdapterMeta> = {
     defaultLevel: 'semantic',
     icon: Code2,
   },
+  kotlin: {
+    name: 'Kotlin',
+    extensions: ['.kt', '.kts'],
+    description:
+      'Tree-sitter analysis of declarations, imports, types, and calls with conservative linking within captured source files; compiler classpaths and Gradle builds are not evaluated, and Gradle scripts are excluded.',
+    defaultLevel: 'semantic',
+    icon: Code2,
+  },
   sql: {
     name: 'SQL',
     extensions: ['.sql'],
