@@ -245,6 +245,23 @@ const KNOWN_ADAPTERS: Record<string, KnownAdapterMeta> = {
     defaultLevel: 'semantic',
     icon: FileCode2,
   },
+  delphi: {
+    name: 'Delphi',
+    languages: ['delphi', 'pas', 'dpr', 'dpk'],
+    extensions: ['.pas', '.dpr', '.dpk', '.inc'],
+    description:
+      'Position-preserving parser for Delphi (Object Pascal) units, programs, libraries, packages, and include files, extracting classes, interfaces, records, methods, and properties with conservative captured-source linking for uses clauses, inheritance, and routine calls.',
+    defaultLevel: 'semantic',
+    icon: FileCode,
+  },
+  dart: {
+    name: 'Dart',
+    extensions: ['.dart'],
+    description:
+      'Position-preserving parser for Dart source code, extracting libraries, classes, mixins, extension types, enums, constructors, and routines with conservative captured-source semantic linking for inheritance, mixin applications, calls, and references.',
+    defaultLevel: 'semantic',
+    icon: Code2,
+  },
   markdown: {
     name: 'Markdown',
     extensions: ['.md', '.markdown', '.mdx'],
