@@ -219,6 +219,15 @@ const KNOWN_ADAPTERS: Record<string, KnownAdapterMeta> = {
     defaultLevel: 'semantic',
     icon: Binary,
   },
+  zig: {
+    name: 'Zig',
+    languages: ['zig'],
+    extensions: ['.zig'],
+    description:
+      'Extracts declarations, imports, calls, and references from captured Zig source, conservatively linking literal relative imports and static names. Compile-time evaluation, build configuration, reflection, and receiver inference leave targets candidate or unresolved.',
+    defaultLevel: 'semantic',
+    icon: Binary,
+  },
   visualbasic: {
     name: 'Visual Basic',
     extensions: ['.vb', '.vbp', '.frm', '.bas', '.cls', '.ctl', '.vbproj', '.sln'],
