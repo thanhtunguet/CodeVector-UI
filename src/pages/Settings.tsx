@@ -262,6 +262,15 @@ const KNOWN_ADAPTERS: Record<string, KnownAdapterMeta> = {
     defaultLevel: 'semantic',
     icon: Code2,
   },
+  objc: {
+    name: 'Objective-C',
+    languages: ['objc', 'm', 'mm'],
+    extensions: ['.m', '.mm', '.h'],
+    description:
+      'Position-preserving parser for Objective-C source and headers, extracting protocols, classes, categories, extensions, methods, properties, and ivars with conservative captured-source linking for message sends, inheritance, and references.',
+    defaultLevel: 'semantic',
+    icon: Code2,
+  },
   markdown: {
     name: 'Markdown',
     extensions: ['.md', '.markdown', '.mdx'],
