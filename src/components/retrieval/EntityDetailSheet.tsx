@@ -118,6 +118,9 @@ export function EntityDetailSheet({
   const entity = detail?.entity;
   const incoming = detail?.incomingRelations ?? [];
   const outgoing = detail?.outgoingRelations ?? [];
+  const hasTraversedDependencies = Boolean(
+    depGraph?.entities.some((node) => node.id !== entityId),
+  );
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -441,7 +444,9 @@ export function EntityDetailSheet({
 
                       {depGraph && (
                         <div className="text-xs text-muted-foreground">
-                          {depGraph.entities.length} entities • {depGraph.relations.length} relations
+                          {hasTraversedDependencies
+                            ? `${depGraph.entities.length} entities • ${depGraph.relations.length} relations`
+                            : `${outgoing.length} direct recorded relations`}
                         </div>
                       )}
                     </div>
@@ -462,12 +467,61 @@ export function EntityDetailSheet({
                               Unable to traverse dependency tree for this entity.
                             </AlertDescription>
                           </Alert>
-                        ) : !depGraph || depGraph.entities.length <= 1 ? (
+                        ) : !hasTraversedDependencies && outgoing.length > 0 ? (
+                          <div className="space-y-3">
+                            <div>
+                              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                                Direct Recorded Relations ({outgoing.length})
+                              </p>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                No traversable dependency paths were found. These are recorded outgoing relations for this symbol; they are direct relations regardless of the selected depth.
+                              </p>
+                            </div>
+                            <div className="space-y-2">
+                              {outgoing.map((edge, idx) => (
+                                <div
+                                  key={`${edge.target}-${edge.type}-${idx}`}
+                                  className="p-3 rounded-lg border bg-card hover:bg-muted/40 transition-colors flex flex-col gap-1.5"
+                                >
+                                  <div className="flex items-center justify-between gap-2">
+                                    <Badge
+                                      variant="outline"
+                                      className={`text-xs font-semibold ${getRelationColor(edge.type)}`}
+                                    >
+                                      {edge.type}
+                                    </Badge>
+                                    <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                                      <span className="capitalize">{edge.resolution}</span>
+                                      {edge.analyzer && (
+                                        <span className="border-l pl-1.5">{edge.analyzer}</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center justify-between gap-2 mt-1">
+                                    <span className="font-mono text-xs text-foreground truncate select-all">
+                                      {edge.target || "Target unavailable"}
+                                    </span>
+                                    {onSelectEntity && edge.target && (
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-6 px-2 text-xs text-primary"
+                                        onClick={() => onSelectEntity(edge.target)}
+                                      >
+                                        Inspect
+                                      </Button>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ) : !depGraph || !hasTraversedDependencies ? (
                           <div className="border border-dashed rounded-lg p-8 text-center text-muted-foreground space-y-1">
                             <Network className="h-8 w-8 mx-auto opacity-40 mb-2" />
                             <p className="text-sm font-medium">No dependent entities at depth {selectedDepth}</p>
                             <p className="text-xs">
-                              Try increasing traversal depth to discover indirect dependencies.
+                              No outgoing relations or traversable dependency paths were found for this symbol.
                             </p>
                           </div>
                         ) : (
