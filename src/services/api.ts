@@ -158,6 +158,16 @@ export interface CapabilitiesReport {
   computeWorker: ComputeWorkerCapabilities;
 }
 
+export interface AnalyzerCatalogEntry {
+  id: string;
+  name: string;
+  languages: string[];
+  extensions: string[];
+  description: string;
+  defaultLevel: 'syntax' | 'semantic' | 'text';
+  icon: string;
+}
+
 const BASE_URL = (import.meta.env.VITE_API_URL || '/api').replace(/\/+$/, '');
 
 /**
@@ -541,6 +551,10 @@ export async function getEvidence(
 
 export async function getCapabilities(): Promise<CapabilitiesReport> {
   return requestJson<CapabilitiesReport>(`${BASE_URL}/capabilities`);
+}
+
+export async function getAnalyzers(): Promise<AnalyzerCatalogEntry[]> {
+  return requestJson<AnalyzerCatalogEntry[]>(`${BASE_URL}/analyzers`);
 }
 
 export async function getHealthReady(): Promise<ReadinessReport> {

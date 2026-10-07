@@ -61,11 +61,11 @@ import {
 } from '@/components/ui/tooltip';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useCapabilities, useSystemHealth } from '@/hooks/useSettings';
+import { useAnalyzerCatalog, useCapabilities, useSystemHealth } from '@/hooks/useSettings';
 import { useToast } from '@/hooks/use-toast';
 import { WorkerEventPanel } from '@/components/worker/WorkerEventPanel';
 import type {
-  AdapterCapability,
+  AnalyzerCatalogEntry,
   DependencyProbeReport,
   DependencyProbeStatus,
 } from '@/services/api';
@@ -96,198 +96,15 @@ function formatCheckTime(isoString?: string): string {
   }
 }
 
-interface KnownAdapterMeta {
-  name: string;
-  languages?: string[];
-  extensions: string[];
-  description: string;
-  defaultLevel: 'syntax' | 'semantic' | 'text';
-  icon: React.ComponentType<{ className?: string }>;
-}
-
-const KNOWN_ADAPTERS: Record<string, KnownAdapterMeta> = {
-  typescript: {
-    name: 'TypeScript/JavaScript',
-    languages: ['typescript', 'javascript'],
-    extensions: ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'],
-    description:
-      'Full AST traversal, symbol extraction, import resolution, and call graph analysis via TypeScript compiler.',
-    defaultLevel: 'syntax',
-    icon: FileCode2,
-  },
-  python: {
-    name: 'Python',
-    extensions: ['.py', '.pyi'],
-    description:
-      'Abstract syntax tree parsing, function and class symbol extraction, and module hierarchy mapping.',
-    defaultLevel: 'syntax',
-    icon: FileCode,
-  },
-  go: {
-    name: 'Go',
-    extensions: ['.go'],
-    description:
-      'Go syntax tree parsing, package declarations, struct and method symbol mapping, and relationship indexing.',
-    defaultLevel: 'syntax',
-    icon: Code2,
-  },
-  java: {
-    name: 'Java',
-    extensions: ['.java'],
-    description:
-      'java-parser CST analysis of packages, types, and members, with conservative import, type, and inheritance linking within captured source files and candidate targets for method calls.',
-    defaultLevel: 'semantic',
-    icon: Code2,
-  },
-  kotlin: {
-    name: 'Kotlin',
-    extensions: ['.kt', '.kts'],
-    description:
-      'Tree-sitter analysis of declarations, imports, types, and calls with conservative linking within captured source files; compiler classpaths and Gradle builds are not evaluated, and Gradle scripts are excluded.',
-    defaultLevel: 'semantic',
-    icon: Code2,
-  },
-  swift: {
-    name: 'Swift',
-    extensions: ['.swift'],
-    description:
-      'Tree-sitter analysis of Swift declarations, types, and calls with conservative links within captured source. Imports, dynamic dispatch, and overload selection remain unresolved; build settings are not evaluated.',
-    defaultLevel: 'semantic',
-    icon: Code2,
-  },
-  sql: {
-    name: 'SQL',
-    extensions: ['.sql'],
-    description:
-      'Dialect-aware parsing and indexing of SQL statements across MySQL, T-SQL, PostgreSQL, Oracle, DB2, and SQLite. Records syntax and source locations without claiming schema or execution semantics.',
-    defaultLevel: 'syntax',
-    icon: Database,
-  },
-  ruby: {
-    name: 'Ruby',
-    extensions: ['.rb', '.rake', '.gemspec', 'Gemfile', 'Rakefile', 'config.ru'],
-    description:
-      'Prism AST analysis of classes, modules, methods, constants, and conservative reference resolution within captured project files.',
-    defaultLevel: 'semantic',
-    icon: FileCode2,
-  },
-  makefile: {
-    name: 'Makefile',
-    extensions: ['.mk', 'Makefile', 'makefile', 'GNUmakefile'],
-    description:
-      'Extracts targets, prerequisites, variables, includes, and recipes, resolving only static relationships from captured files; runtime Make evaluation stays unresolved.',
-    defaultLevel: 'semantic',
-    icon: Code2,
-  },
-  bash: {
-    name: 'Bash / Shell',
-    extensions: ['.sh', '.bash', '.bats'],
-    description: 'Shell functions, variables, source dependencies, and command references.',
-    defaultLevel: 'semantic',
-    icon: Terminal,
-  },
-  csharp: {
-    name: 'C#',
-    extensions: ['.cs'],
-    description:
-      'Roslyn analyzer semantic engine parsing syntax trees, type symbols, inheritance hierarchies, and call graphs.',
-    defaultLevel: 'semantic',
-    icon: Hash,
-  },
-  cpp: {
-    name: 'C/C++',
-    languages: ['cpp', 'c'],
-    extensions: ['.c', '.cpp', '.cc', '.cxx', '.c++', '.hpp', '.hh', '.hxx', '.h++', '.inl', '.tpp', '.ipp', '.h'],
-    description:
-      'C and C++ AST parsing via the shared Lezer C++ analyzer, class/struct/union symbols, function and method definitions, macro extraction, and header include dependency traversal.',
-    defaultLevel: 'semantic',
-    icon: Code2,
-  },
-  php: {
-    name: 'PHP',
-    extensions: ['.php', '.phtml', '.inc'],
-    description:
-      'Glayzzle PHP parser AST analysis, namespace resolution, class/trait hierarchies, method calls, and Composer autoloading mapping.',
-    defaultLevel: 'semantic',
-    icon: FileCode2,
-  },
-  rust: {
-    name: 'Rust',
-    extensions: ['.rs'],
-    description:
-      'Lezer Rust AST traversal, struct/enum definitions, trait implementations, module hierarchies, and macro symbol indexing.',
-    defaultLevel: 'semantic',
-    icon: Binary,
-  },
-  zig: {
-    name: 'Zig',
-    languages: ['zig'],
-    extensions: ['.zig'],
-    description:
-      'Extracts declarations, imports, calls, and references from captured Zig source, conservatively linking literal relative imports and static names. Compile-time evaluation, build configuration, reflection, and receiver inference leave targets candidate or unresolved.',
-    defaultLevel: 'semantic',
-    icon: Binary,
-  },
-  visualbasic: {
-    name: 'Visual Basic',
-    extensions: ['.vb', '.vbp', '.frm', '.bas', '.cls', '.ctl', '.vbproj', '.sln'],
-    description:
-      'Roslyn VB.NET compiler parser and dedicated VB6 grammar analyzer for legacy project membership and symbol extraction.',
-    defaultLevel: 'semantic',
-    icon: FileCode,
-  },
-  cobol: {
-    name: 'COBOL',
-    languages: ['cobol', 'cob', 'cbl'],
-    extensions: ['.cbl', '.cob', '.cobol', '.cpy'],
-    description:
-      'Position-preserving parser for ANSI/IBM fixed reference and free format source, extracting programs, sections, paragraphs, and data items with conservative captured-source linking for PERFORM, CALL, COPY, and data references.',
-    defaultLevel: 'semantic',
-    icon: FileCode,
-  },
-  perl: {
-    name: 'Perl',
-    languages: ['perl', 'pl'],
-    extensions: ['.pl', '.pm', '.t', '.psgi', '.plx'],
-    description:
-      'Tree-sitter static analysis of packages, subroutines, imports, and calls with conservative lexical and package scope linking within captured source files.',
-    defaultLevel: 'semantic',
-    icon: FileCode2,
-  },
-  delphi: {
-    name: 'Delphi',
-    languages: ['delphi', 'pas', 'dpr', 'dpk'],
-    extensions: ['.pas', '.dpr', '.dpk', '.inc'],
-    description:
-      'Position-preserving parser for Delphi (Object Pascal) units, programs, libraries, packages, and include files, extracting classes, interfaces, records, methods, and properties with conservative captured-source linking for uses clauses, inheritance, and routine calls.',
-    defaultLevel: 'semantic',
-    icon: FileCode,
-  },
-  dart: {
-    name: 'Dart',
-    extensions: ['.dart'],
-    description:
-      'Position-preserving parser for Dart source code, extracting libraries, classes, mixins, extension types, enums, constructors, and routines with conservative captured-source semantic linking for inheritance, mixin applications, calls, and references.',
-    defaultLevel: 'semantic',
-    icon: Code2,
-  },
-  objc: {
-    name: 'Objective-C',
-    languages: ['objc', 'm', 'mm'],
-    extensions: ['.m', '.mm', '.h'],
-    description:
-      'Position-preserving parser for Objective-C source and headers, extracting protocols, classes, categories, extensions, methods, properties, and ivars with conservative captured-source linking for message sends, inheritance, and references.',
-    defaultLevel: 'semantic',
-    icon: Code2,
-  },
-  markdown: {
-    name: 'Markdown',
-    extensions: ['.md', '.markdown', '.mdx'],
-    description:
-      'Structural heading hierarchy parsing, content chunking, document symbol mapping, and textual context extraction.',
-    defaultLevel: 'text',
-    icon: FileText,
-  },
+const ANALYZER_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+  Binary,
+  Code2,
+  Database,
+  FileCode,
+  FileCode2,
+  FileText,
+  Hash,
+  Terminal,
 };
 
 export default function Settings() {
@@ -310,11 +127,18 @@ export default function Settings() {
     refetch: refetchCapabilities,
   } = useCapabilities();
 
-  const isRefreshing = isHealthFetching || isCapFetching;
+  const {
+    data: analyzerCatalog,
+    isLoading: isAnalyzerCatalogLoading,
+    isFetching: isAnalyzerCatalogFetching,
+    refetch: refetchAnalyzerCatalog,
+  } = useAnalyzerCatalog();
+
+  const isRefreshing = isHealthFetching || isCapFetching || isAnalyzerCatalogFetching;
 
   const handleRefresh = async () => {
     try {
-      await Promise.all([refetchHealth(), refetchCapabilities()]);
+      await Promise.all([refetchHealth(), refetchCapabilities(), refetchAnalyzerCatalog()]);
       toast({
         title: 'System Health Refreshed',
         description: `Probes updated at ${format(new Date(), 'HH:mm:ss')}`,
@@ -391,43 +215,36 @@ export default function Settings() {
     capabilities?.computeWorker?.reason ||
     (computeProbe?.detail ?? (computeWorkerAvailable ? undefined : 'Compute worker unreachable or unconfigured'));
 
-  // Group language capabilities by their shared analyzer.
+  // The backend owns analyzer metadata; capabilities supply the live level and availability.
   const adapterList = useMemo(() => {
     const serverAdapters = capabilities?.server?.adapters || [];
-    const analyzerKey = (language: string) => {
-      const languageKey = language.toLowerCase();
-      return Object.keys(KNOWN_ADAPTERS).find((key) =>
-        (KNOWN_ADAPTERS[key].languages || [key]).includes(languageKey)
-      ) || languageKey;
-    };
-    const keys = new Set([
-      ...Object.keys(KNOWN_ADAPTERS),
-      ...serverAdapters.map((a) => analyzerKey(a.language)),
-    ]);
-
-    return Array.from(keys).map((key) => {
-      const serverEntries = serverAdapters.filter((a) => analyzerKey(a.language) === key);
-      const serverEntry = serverEntries[0];
-      const known = KNOWN_ADAPTERS[key];
-      const levels = serverEntries.map((entry) => entry.level || entry.capability || known?.defaultLevel || 'syntax');
-      const level = levels.includes('text') ? 'text' : levels.includes('syntax') ? 'syntax' : levels[0];
+    return (analyzerCatalog || []).map((analyzer: AnalyzerCatalogEntry) => {
+      const languages = new Set(analyzer.languages.map((language) => language.toLowerCase()));
+      const matchingCapabilities = serverAdapters.filter((entry) =>
+        languages.has(entry.language.toLowerCase())
+      );
+      const levels = matchingCapabilities
+        .map((entry) => entry.level || entry.capability)
+        .filter((level): level is string => Boolean(level));
+      const level = levels.includes('text')
+        ? 'text'
+        : levels.includes('syntax')
+          ? 'syntax'
+          : levels[0] || analyzer.defaultLevel;
       return {
-        id: key,
-        name: known?.name || serverEntry?.language || key.toUpperCase(),
-        level: (level || known?.defaultLevel || 'syntax') as
+        id: analyzer.id,
+        name: analyzer.name,
+        level: level as
           | 'syntax'
           | 'semantic'
           | 'text',
-        extensions: Array.from(new Set(serverEntries.length
-          ? serverEntries.flatMap((entry) => entry.extensions || known?.extensions || [])
-          : known?.extensions || [])),
-        description: Array.from(new Set(serverEntries.map((entry) => entry.description).filter(Boolean))).join(' ') ||
-          known?.description || 'Code syntax parser and symbol extractor.',
-        available: serverEntries.every((entry) => entry.available !== false),
-        Icon: known?.icon || FileCode,
+        extensions: analyzer.extensions,
+        description: analyzer.description,
+        available: matchingCapabilities.every((entry) => entry.available !== false),
+        Icon: ANALYZER_ICONS[analyzer.icon] || FileCode,
       };
     });
-  }, [capabilities?.server?.adapters]);
+  }, [analyzerCatalog, capabilities?.server?.adapters]);
 
   // Overall probe statistics
   const coreProbes = [postgresProbe, neo4jProbe, qdrantProbe, computeProbe].filter(Boolean);
@@ -567,7 +384,7 @@ export default function Settings() {
           </CardHeader>
           <CardContent>
             <div className="text-xl font-bold">
-              {isCapLoading ? (
+              {isAnalyzerCatalogLoading ? (
                 <Skeleton className="h-7 w-24" />
               ) : (
                 <span>{adapterList.length} Registered</span>
@@ -639,7 +456,7 @@ export default function Settings() {
             isLoading={isHealthLoading}
           />
 
-          <AdaptersSection adapters={adapterList} isLoading={isCapLoading} />
+          <AdaptersSection adapters={adapterList} isLoading={isAnalyzerCatalogLoading} />
 
           <ComputeWorkerSection
             available={computeWorkerAvailable}
@@ -670,7 +487,7 @@ export default function Settings() {
 
         {/* TAB: Analyzers */}
         <TabsContent value="adapters" className="space-y-6 mt-0">
-          <AdaptersSection adapters={adapterList} isLoading={isCapLoading} />
+          <AdaptersSection adapters={adapterList} isLoading={isAnalyzerCatalogLoading} />
         </TabsContent>
 
         {/* TAB: Compute Worker AI */}
