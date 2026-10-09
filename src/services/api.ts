@@ -114,6 +114,24 @@ export interface HealthReport {
 
 export type SystemHealthReport = HealthReport;
 
+export type AnalyzerFeatureStatus = 'supported' | 'partial' | 'unsupported' | 'unknown';
+export type AnalyzerFeature = 'imports' | 'calls' | 'types' | 'heritage' | 'references' | 'config'
+  | 'namedBindings' | 'exports' | 'typeAnnotations' | 'constructorInference' | 'frameworks' | 'entryPoints';
+
+export interface AnalyzerCapabilityProfile {
+  version: '1';
+  language: string;
+  name: string;
+  level: 'syntax' | 'semantic' | 'text';
+  features: Record<AnalyzerFeature, { status: AnalyzerFeatureStatus; notes: string }>;
+  constructCapabilities?: readonly {
+    construct: string;
+    version: string;
+    state: 'supported_subset' | 'unsupported';
+    reasons: readonly string[];
+  }[];
+}
+
 export interface AdapterCapability {
   language: string;
   level?: 'syntax' | 'semantic' | 'text' | string;
@@ -121,6 +139,7 @@ export interface AdapterCapability {
   available?: boolean;
   extensions?: readonly string[];
   description?: string;
+  profile?: AnalyzerCapabilityProfile;
 }
 
 export interface ServerCapabilities {
