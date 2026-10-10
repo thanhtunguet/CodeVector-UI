@@ -187,6 +187,47 @@ export interface AnalyzerCatalogEntry {
   icon: string;
 }
 
+export interface DocumentParserDeclaredSupport {
+  readonly state: 'declared' | 'unsupported';
+  readonly format: string;
+  readonly canonicalExtension: string;
+  readonly extensions: readonly string[];
+  readonly mimeType?: string;
+}
+
+export interface DocumentParserServiceAvailability {
+  readonly state: 'ready' | 'unavailable' | 'degraded';
+  readonly enabled: boolean;
+  readonly reason?: string;
+  readonly version?: string;
+}
+
+export interface DocumentParserSnapshotReadiness {
+  readonly state: 'ready' | 'partial' | 'unavailable' | 'unverified';
+  readonly reason?: string;
+  readonly counts?: {
+    readonly totalEligible?: number;
+    readonly totalParsed?: number;
+    readonly totalEmbedded?: number;
+  };
+  readonly partialReasons?: readonly string[];
+}
+
+export interface DocumentParserCatalogEntry {
+  readonly id: string;
+  readonly name: string;
+  readonly identity: string;
+  readonly format: string;
+  readonly extensions: readonly string[];
+  readonly canonicalExtension: string;
+  readonly description: string;
+  readonly defaultLevel: 'syntax' | 'semantic' | 'text';
+  readonly icon: string;
+  readonly declaredSupport: DocumentParserDeclaredSupport;
+  readonly serviceAvailability: DocumentParserServiceAvailability;
+  readonly indexedSnapshotReadiness: DocumentParserSnapshotReadiness;
+}
+
 const BASE_URL = (import.meta.env.VITE_API_URL || '/api').replace(/\/+$/, '');
 
 /**
@@ -574,6 +615,17 @@ export async function getCapabilities(): Promise<CapabilitiesReport> {
 
 export async function getAnalyzers(): Promise<AnalyzerCatalogEntry[]> {
   return requestJson<AnalyzerCatalogEntry[]>(`${BASE_URL}/analyzers`);
+}
+
+export async function getDocumentParsers(
+  projectCode?: string,
+  snapshotId?: string
+): Promise<DocumentParserCatalogEntry[]> {
+  const query = new URLSearchParams();
+  if (projectCode) query.set('projectCode', projectCode);
+  if (snapshotId) query.set('snapshotId', snapshotId);
+  const qs = query.toString();
+  return requestJson<DocumentParserCatalogEntry[]>(`${BASE_URL}/parsers${qs ? `?${qs}` : ''}`);
 }
 
 export async function getHealthReady(): Promise<ReadinessReport> {

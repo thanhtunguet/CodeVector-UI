@@ -15,12 +15,15 @@ import {
   ExternalLink,
   FileCode,
   FileCode2,
+  FileSpreadsheet,
   FileText,
   Globe,
   Hash,
+  HelpCircle,
   Info,
   Layers,
   Network,
+  Presentation,
   RefreshCw,
   Server,
   Share2,
@@ -61,13 +64,19 @@ import {
 } from '@/components/ui/tooltip';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useAnalyzerCatalog, useCapabilities, useSystemHealth } from '@/hooks/useSettings';
+import {
+  useAnalyzerCatalog,
+  useCapabilities,
+  useDocumentParserCatalog,
+  useSystemHealth,
+} from '@/hooks/useSettings';
 import { useToast } from '@/hooks/use-toast';
 import { WorkerEventPanel } from '@/components/worker/WorkerEventPanel';
 import type {
   AnalyzerCatalogEntry,
   DependencyProbeReport,
   DependencyProbeStatus,
+  DocumentParserCatalogEntry,
 } from '@/services/api';
 import { format } from 'date-fns';
 
@@ -102,8 +111,10 @@ const ANALYZER_ICONS: Record<string, React.ComponentType<{ className?: string }>
   Database,
   FileCode,
   FileCode2,
+  FileSpreadsheet,
   FileText,
   Hash,
+  Presentation,
   Terminal,
 };
 
@@ -134,11 +145,24 @@ export default function Settings() {
     refetch: refetchAnalyzerCatalog,
   } = useAnalyzerCatalog();
 
-  const isRefreshing = isHealthFetching || isCapFetching || isAnalyzerCatalogFetching;
+  const {
+    data: parserCatalog,
+    isLoading: isParserCatalogLoading,
+    isFetching: isParserCatalogFetching,
+    refetch: refetchParserCatalog,
+  } = useDocumentParserCatalog();
+
+  const isRefreshing =
+    isHealthFetching || isCapFetching || isAnalyzerCatalogFetching || isParserCatalogFetching;
 
   const handleRefresh = async () => {
     try {
-      await Promise.all([refetchHealth(), refetchCapabilities(), refetchAnalyzerCatalog()]);
+      await Promise.all([
+        refetchHealth(),
+        refetchCapabilities(),
+        refetchAnalyzerCatalog(),
+        refetchParserCatalog(),
+      ]);
       toast({
         title: 'System Health Refreshed',
         description: `Probes updated at ${format(new Date(), 'HH:mm:ss')}`,
@@ -435,7 +459,7 @@ export default function Settings() {
             Infrastructure Probes
           </TabsTrigger>
           <TabsTrigger value="adapters" className="text-xs py-1.5">
-            Analyzers
+            Analyzers & Parsers
           </TabsTrigger>
           <TabsTrigger value="compute" className="text-xs py-1.5">
             Compute AI Worker
@@ -457,6 +481,8 @@ export default function Settings() {
           />
 
           <AdaptersSection adapters={adapterList} isLoading={isAnalyzerCatalogLoading} />
+
+          <DocumentParsersSection parsers={parserCatalog || []} isLoading={isParserCatalogLoading} />
 
           <ComputeWorkerSection
             available={computeWorkerAvailable}
@@ -485,9 +511,10 @@ export default function Settings() {
           />
         </TabsContent>
 
-        {/* TAB: Analyzers */}
+        {/* TAB: Analyzers & Parsers */}
         <TabsContent value="adapters" className="space-y-6 mt-0">
           <AdaptersSection adapters={adapterList} isLoading={isAnalyzerCatalogLoading} />
+          <DocumentParsersSection parsers={parserCatalog || []} isLoading={isParserCatalogLoading} />
         </TabsContent>
 
         {/* TAB: Compute Worker AI */}
@@ -870,6 +897,184 @@ function AdaptersSection({
                       ) : (
                         <span className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
                           <XCircle className="h-3 w-3" /> Offline
+                        </span>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })
+            )}
+          </TableBody>
+        </Table>
+      </Card>
+    </div>
+  );
+}
+
+function DocumentParsersSection({
+  parsers,
+  isLoading,
+}: {
+  parsers: DocumentParserCatalogEntry[];
+  isLoading: boolean;
+}) {
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold tracking-tight text-foreground flex items-center gap-2">
+            <FileText className="h-4 w-4 text-primary" />
+            Document Parser Registry
+          </h2>
+          <p className="text-xs text-muted-foreground">
+            Backend-declared documentation formats, single-owner dispatch, and CAS chunkers configured for Document RAG.
+          </p>
+        </div>
+        <div className="hidden sm:flex items-center gap-2">
+          <Badge variant="outline" className="text-xs bg-muted/40 font-mono">
+            {parsers.length} Parsers Configured
+          </Badge>
+        </div>
+      </div>
+
+      <Card className="shadow-sm overflow-hidden">
+        <Table>
+          <TableHeader className="bg-muted/40">
+            <TableRow>
+              <TableHead className="w-[200px]">Format & Parser</TableHead>
+              <TableHead className="w-[120px]">Capability</TableHead>
+              <TableHead className="w-[200px]">Extensions</TableHead>
+              <TableHead>Ingestion Extraction Role</TableHead>
+              <TableHead className="w-[130px]">Service State</TableHead>
+              <TableHead className="w-[130px] text-right">Snapshot Readiness</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {isLoading ? (
+              Array.from({ length: 4 }).map((_, idx) => (
+                <TableRow key={idx}>
+                  <TableCell>
+                    <Skeleton className="h-5 w-32" />
+                  </TableCell>
+                  <TableCell>
+                    <Skeleton className="h-5 w-16" />
+                  </TableCell>
+                  <TableCell>
+                    <Skeleton className="h-5 w-32" />
+                  </TableCell>
+                  <TableCell>
+                    <Skeleton className="h-5 w-64" />
+                  </TableCell>
+                  <TableCell>
+                    <Skeleton className="h-5 w-20" />
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Skeleton className="h-5 w-20 ml-auto" />
+                  </TableCell>
+                </TableRow>
+              ))
+            ) : parsers.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={6} className="text-center py-6 text-xs text-muted-foreground">
+                  No document parsers loaded from backend.
+                </TableCell>
+              </TableRow>
+            ) : (
+              parsers.map((parser) => {
+                const IconComponent = ANALYZER_ICONS[parser.icon] || FileText;
+                const name = parser.name || parser.id;
+                const description = parser.description || 'Document parser';
+
+                const serviceState = parser.serviceAvailability?.state ?? 'unavailable';
+                const serviceReason = parser.serviceAvailability?.reason;
+
+                const readinessState = parser.indexedSnapshotReadiness?.state ?? 'unverified';
+                const readinessReason = parser.indexedSnapshotReadiness?.reason;
+                const counts = parser.indexedSnapshotReadiness?.counts;
+                const partialReasons = parser.indexedSnapshotReadiness?.partialReasons;
+
+                return (
+                  <TableRow key={parser.id} className="hover:bg-muted/30">
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-2.5">
+                        <div className="p-1.5 rounded-md bg-muted text-foreground">
+                          <IconComponent className="h-4 w-4" />
+                        </div>
+                        <div>
+                          <div className="font-semibold text-xs leading-none">{name}</div>
+                          <div className="text-[11px] font-mono text-muted-foreground mt-0.5">
+                            {parser.identity}
+                          </div>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <CapabilityLevelBadge level={parser.defaultLevel} />
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1">
+                        {parser.extensions.map((ext) => (
+                          <span
+                            key={ext}
+                            className="font-mono text-[11px] bg-muted px-1.5 py-0.5 rounded text-foreground border border-border"
+                          >
+                            {ext}
+                          </span>
+                        ))}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground leading-relaxed">
+                      {description}
+                    </TableCell>
+                    <TableCell>
+                      {serviceState === 'ready' ? (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
+                          <CheckCircle2 className="h-3 w-3" /> Ready
+                        </span>
+                      ) : serviceState === 'degraded' ? (
+                        <span
+                          className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-600 dark:text-amber-400"
+                          title={serviceReason}
+                        >
+                          <AlertCircle className="h-3 w-3" /> Degraded
+                        </span>
+                      ) : (
+                        <span
+                          className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground"
+                          title={serviceReason || 'Service unavailable'}
+                        >
+                          <XCircle className="h-3 w-3" /> Unavailable
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {readinessState === 'ready' ? (
+                        <span
+                          className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400"
+                          title={counts ? `${counts.totalEmbedded ?? counts.totalParsed ?? 0} indexed` : undefined}
+                        >
+                          <CheckCircle2 className="h-3 w-3" /> Ready
+                        </span>
+                      ) : readinessState === 'partial' ? (
+                        <span
+                          className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-600 dark:text-amber-400"
+                          title={partialReasons?.join(', ')}
+                        >
+                          <AlertCircle className="h-3 w-3" /> Partial
+                        </span>
+                      ) : readinessState === 'unavailable' ? (
+                        <span
+                          className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground"
+                          title={readinessReason || 'Snapshot not ready'}
+                        >
+                          <XCircle className="h-3 w-3" /> Unavailable
+                        </span>
+                      ) : (
+                        <span
+                          className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground"
+                          title={readinessReason || 'No snapshot selected'}
+                        >
+                          <HelpCircle className="h-3 w-3" /> Unverified
                         </span>
                       )}
                     </TableCell>
