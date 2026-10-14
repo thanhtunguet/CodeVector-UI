@@ -229,8 +229,7 @@ export default function Settings() {
 
   const embeddingDimensions =
     capabilities?.computeWorker?.dimensions ||
-    (embeddingConfig?.dimensions as number | undefined) ||
-    (computeWorkerAvailable ? 384 : undefined);
+    (embeddingConfig?.dimensions as number | undefined);
 
   const embeddingBatchSize = (embeddingConfig?.batch_size as number | undefined) || 32;
   const embeddingConcurrency = (embeddingConfig?.max_concurrency as number | undefined) || 4;
@@ -443,7 +442,9 @@ export default function Settings() {
               )}
             </div>
             <p className="text-xs text-muted-foreground mt-1.5 truncate">
-              {computeWorkerAvailable ? `${embeddingModelId} (${embeddingDimensions}d)` : 'Graph-only fallback active'}
+              {computeWorkerAvailable
+                ? `${embeddingModelId} (${embeddingDimensions ? `${embeddingDimensions}d` : 'N/A'})`
+                : 'Graph-only fallback active'}
             </p>
           </CardContent>
         </Card>
