@@ -30,6 +30,42 @@ export interface SnapshotRevision {
   fileCount: number;
 }
 
+export type IngestionPipeline = 'source' | 'docs';
+export type SnapshotPipeline = IngestionPipeline | 'mixed';
+export type IngestionChildState = 'pending' | 'running' | 'succeeded' | 'failed' | 'cancelled';
+export type IngestionOperationState = IngestionChildState | 'partial_success';
+
+export interface SnapshotReadiness {
+  state: 'ready' | 'unavailable' | 'failed' | 'unknown';
+  reason?: string;
+  version?: string;
+}
+
+export interface DocumentSnapshotReadiness extends Omit<SnapshotReadiness, 'state'> {
+  state: SnapshotReadiness['state'] | 'partial';
+  counts?: { eligible: number; captured: number; parsed: number; embedded: number };
+  omissions?: readonly { path: string; reason: string; details?: Readonly<Record<string, unknown>> }[];
+}
+
+export interface KnowledgeCount {
+  value: number | null;
+  exactness: 'exact' | 'lower_bound' | 'unknown';
+  scope: string;
+}
+
+export interface SnapshotCoverage {
+  sources: KnowledgeCount;
+  capturedFiles: KnowledgeCount;
+  skippedPaths: KnowledgeCount;
+  captureDiagnostics: KnowledgeCount;
+  unsupportedRules: KnowledgeCount;
+  analysisDiagnostics: KnowledgeCount;
+  unresolvedRelations: KnowledgeCount;
+  candidateRelations: KnowledgeCount;
+  analyzers: readonly { analyzer: string; version: string; language: string; capability: string }[];
+  reasons: readonly string[];
+}
+
 export interface Snapshot {
   id: string;
   projectCode: string;
@@ -42,6 +78,17 @@ export interface Snapshot {
   embeddingModelId?: string;
   embeddingDimensions?: number;
   revisions?: SnapshotRevision[];
+  pipeline?: SnapshotPipeline;
+  operationId?: string;
+  operationChildId?: string;
+  coverage?: SnapshotCoverage;
+  codeGraph?: SnapshotReadiness;
+  codeSemantic?: SnapshotReadiness;
+  documentParse?: DocumentSnapshotReadiness;
+  documentSemantic?: DocumentSnapshotReadiness;
+  relationEvidence?: SnapshotReadiness;
+  modules?: SnapshotReadiness;
+  codeDocLinks?: SnapshotReadiness;
 }
 
 export interface IngestionRun {
@@ -65,6 +112,54 @@ export interface IngestionRun {
   lastEmbeddingObservedAt?: string;
   embeddingCommunicationFailures?: number;
   cancelRequestedAt?: string;
+  executionKind?: IngestionPipeline | 'legacy_mixed';
+  operationId?: string;
+  operationChildId?: string;
+  counters?: Partial<Record<'sources' | 'files' | 'entities' | 'relations' | 'unresolvedRelations'
+    | 'chunks' | 'vectors' | 'documentsEligible' | 'documentsCaptured' | 'documentsParsed'
+    | 'documentsEmbedded', number>>;
+}
+
+export interface PipelineIngestionStatus {
+  headId: string | null;
+  published?: Snapshot | null;
+  latest?: Snapshot | null;
+  activeRun?: IngestionRun | null;
+  runs: IngestionRun[];
+}
+
+export type PipelineIngestRequest =
+  | { pipeline: 'source'; requireSemantic?: boolean; requireDocumentSemantic?: never }
+  | { pipeline: 'docs'; requireDocumentSemantic?: boolean; requireSemantic?: never }
+  | { pipeline: 'both'; requireSemantic?: boolean; requireDocumentSemantic?: boolean };
+
+export type PipelineRetryRequest = Exclude<PipelineIngestRequest, { pipeline: 'both' }>;
+
+export interface IngestionOperationChild {
+  id: string;
+  pipeline: SnapshotPipeline;
+  state: IngestionChildState;
+  runId: string | null;
+  snapshotId: string | null;
+  failureReason?: string;
+}
+
+export interface IngestionOperationReceipt {
+  operationId: string;
+  state: IngestionOperationState;
+  statusUrl: string;
+  children: IngestionOperationChild[];
+}
+
+export interface IngestionOperation extends IngestionOperationReceipt {
+  projectCode: string;
+  kind: 'single' | 'both' | 'legacy_mixed';
+  target: IngestionPipeline | 'both' | 'legacy_mixed';
+  options: { pipeline?: IngestionPipeline | 'both'; requireSemantic?: boolean; requireDocumentSemantic?: boolean };
+  createdAt: string;
+  finishedAt?: string;
+  cancelRequestedAt?: string;
+  retryOfOperationId?: string;
 }
 
 export interface IngestionStatus {
@@ -76,6 +171,9 @@ export interface IngestionStatus {
   latestSuccessfulSnapshot?: Snapshot;
   runs?: IngestionRun[];
   ingestionImplemented?: boolean;
+  headId?: string | null;
+  pipelines?: Record<IngestionPipeline, PipelineIngestionStatus>;
+  activeOperation?: IngestionOperation | null;
 }
 
 export type DependencyProbeStatus = 'up' | 'down' | 'not_configured';
@@ -355,11 +453,15 @@ export async function getProjectSources(code: string): Promise<Source[]> {
   return data.sources;
 }
 
-export async function getProjectSnapshots(code: string): Promise<Snapshot[]> {
+export async function getProjectSnapshots(code: string, pipeline?: SnapshotPipeline): Promise<Snapshot[]> {
   const data = await requestJson<{ snapshots: Snapshot[] }>(
     `${BASE_URL}/projects/${encodeURIComponent(code)}/snapshots`
   );
-  return data.snapshots;
+  // The server returns all attempts. Legacy mixed rows belong to both heads.
+  return pipeline ? data.snapshots.filter(snapshot =>
+    pipeline === 'mixed' ? !snapshot.pipeline || snapshot.pipeline === 'mixed'
+      : snapshot.pipeline === pipeline || !snapshot.pipeline || snapshot.pipeline === 'mixed'
+  ) : data.snapshots;
 }
 
 export async function getProjectSnapshot(code: string, snapshotId: string): Promise<Snapshot> {
@@ -437,6 +539,62 @@ export async function getProjectIngestion(code: string): Promise<IngestionStatus
     latestSuccessfulSnapshot: published,
     latestSnapshot: latest,
   };
+}
+
+export async function triggerPipelineIngest(
+  code: string,
+  input: PipelineIngestRequest,
+  requestKey?: string
+): Promise<IngestionOperationReceipt> {
+  const { pipeline, ...options } = input;
+  return requestJson<IngestionOperationReceipt>(
+    `${BASE_URL}/projects/${encodeURIComponent(code)}/ingest/${pipeline}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(requestKey ? { 'Idempotency-Key': requestKey } : {}) },
+      body: JSON.stringify(options),
+    }
+  );
+}
+
+export async function getIngestionOperation(code: string, operationId: string): Promise<IngestionOperation> {
+  return requestJson<IngestionOperation>(
+    `${BASE_URL}/projects/${encodeURIComponent(code)}/ingestion/operations/${encodeURIComponent(operationId)}`
+  );
+}
+
+export async function cancelIngestionOperation(code: string, operationId: string): Promise<IngestionOperation> {
+  return requestJson<IngestionOperation>(
+    `${BASE_URL}/projects/${encodeURIComponent(code)}/ingestion/operations/${encodeURIComponent(operationId)}/cancel`,
+    { method: 'POST' }
+  );
+}
+
+export async function cancelIngestionRun(code: string, runId: string): Promise<{
+  runId: string;
+  state: 'cancel_requested' | 'succeeded' | 'failed' | 'cancelled';
+}> {
+  return requestJson(
+    `${BASE_URL}/projects/${encodeURIComponent(code)}/ingestion/${encodeURIComponent(runId)}/cancel`,
+    { method: 'POST' }
+  );
+}
+
+export async function retryPipelineIngest(
+  code: string,
+  operationId: string,
+  input: PipelineRetryRequest,
+  requestKey?: string
+): Promise<IngestionOperationReceipt> {
+  const { pipeline, ...options } = input;
+  return requestJson<IngestionOperationReceipt>(
+    `${BASE_URL}/projects/${encodeURIComponent(code)}/ingestion/operations/${encodeURIComponent(operationId)}/retry/${pipeline}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(requestKey ? { 'Idempotency-Key': requestKey } : {}) },
+      body: JSON.stringify(options),
+    }
+  );
 }
 
 export interface IngestResult {

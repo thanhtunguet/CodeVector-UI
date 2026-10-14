@@ -6,7 +6,6 @@ import {
   deleteProject,
   getHealth,
   getProject,
-  getProjectIngestion,
   getProjects,
   getProjectSnapshot,
   getProjectSnapshots,
@@ -20,12 +19,18 @@ import {
   type CreateSourceInput,
   type HealthReport,
   type IngestResult,
-  type IngestionStatus,
   type Project,
   type SearchResponse,
   type Snapshot,
+  type SnapshotPipeline,
   type Source,
 } from '@/services/api';
+import { ingestionKeys } from './ingestionQueries';
+
+export {
+  useProjectIngestion, usePipelineIngestion, useIngestionOperation,
+  useTriggerPipelineIngest, useRetryPipelineIngest, useCancelIngestionOperation, useCancelIngestionRun,
+} from './useIngestion';
 
 export function useProjects() {
   return useQuery<Project[]>({
@@ -124,10 +129,10 @@ export function useProjectSources(code: string | undefined) {
   });
 }
 
-export function useProjectSnapshots(code: string | undefined) {
+export function useProjectSnapshots(code: string | undefined, pipeline?: SnapshotPipeline) {
   return useQuery<Snapshot[]>({
-    queryKey: ['projects', code, 'snapshots'],
-    queryFn: () => getProjectSnapshots(code!),
+    queryKey: ingestionKeys.snapshots(code, pipeline),
+    queryFn: () => getProjectSnapshots(code!, pipeline),
     enabled: Boolean(code),
   });
 }
@@ -137,30 +142,6 @@ export function useProjectSnapshot(code: string | undefined, snapshotId: string 
     queryKey: ['projects', code, 'snapshots', snapshotId],
     queryFn: () => getProjectSnapshot(code!, snapshotId!),
     enabled: Boolean(code && snapshotId),
-  });
-}
-
-export function useProjectIngestion(
-  code: string | undefined,
-  options?: {
-    refetchInterval?:
-      | number
-      | false
-      | ((query: import('@tanstack/react-query').Query<IngestionStatus, Error>) => number | false | undefined);
-  }
-) {
-  return useQuery<IngestionStatus>({
-    queryKey: ['projects', code, 'ingestion'],
-    queryFn: () => getProjectIngestion(code!),
-    enabled: Boolean(code),
-    refetchInterval: (query) => {
-      if (options?.refetchInterval !== undefined) {
-        return typeof options.refetchInterval === 'function'
-          ? options.refetchInterval(query)
-          : options.refetchInterval;
-      }
-      return query.state.data?.activeRun ? 2000 : false;
-    },
   });
 }
 
