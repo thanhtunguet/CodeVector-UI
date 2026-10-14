@@ -13,6 +13,21 @@ import { useRememberedOperation } from './useRememberedOperation';
 import { AlertCircle, Loader2, Play } from 'lucide-react';
 
 export type IngestionTarget = PipelineIngestRequest['pipeline'];
+
+function createRequestKey(): string {
+  const cryptoApi = globalThis.crypto;
+  if (typeof cryptoApi?.randomUUID === 'function') {
+    return cryptoApi.randomUUID();
+  }
+
+  if (typeof cryptoApi?.getRandomValues === 'function') {
+    const bytes = cryptoApi.getRandomValues(new Uint8Array(16));
+    return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+  }
+
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
+}
+
 interface TriggerIngestionDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -58,7 +73,7 @@ export function TriggerIngestionDialog({ open, onOpenChange, projectCode, projec
       : { pipeline, requireSemantic, requireDocumentSemantic };
     try {
       setApiError(null);
-      requestKey.current ??= crypto.randomUUID();
+      requestKey.current ??= createRequestKey();
       const receipt = retryOfOperationId && input.pipeline !== 'both'
         ? await retry.mutateAsync({ code: projectCode, operationId: retryOfOperationId, input, requestKey: requestKey.current })
         : await trigger.mutateAsync({ code: projectCode, input, requestKey: requestKey.current });
