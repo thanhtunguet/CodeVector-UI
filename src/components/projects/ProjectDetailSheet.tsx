@@ -6,6 +6,9 @@ import {
   SheetTitle,
   SheetDescription,
 } from "@/components/ui/sheet";
+import { IngestionActions } from "@/components/sources/IngestionActions";
+import { IngestionStatusPanel } from "@/components/sources/IngestionStatusPanel";
+import { SnapshotReadinessDisplay } from "@/components/snapshots/SnapshotReadinessDisplay";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -157,86 +160,8 @@ export function ProjectDetailSheet({
 
         {/* Scrollable Content */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          {/* Ingestion & Overview Card */}
-          <Card className="shadow-xs">
-            <CardHeader className="py-3 px-4 flex flex-row items-center justify-between space-y-0 border-b">
-              <CardTitle className="text-xs font-semibold flex items-center gap-2">
-                <Activity className="h-4 w-4 text-primary" />
-                Ingestion & Index Status
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-4 text-xs space-y-3">
-              {isIngestionLoading ? (
-                <div className="space-y-2">
-                  <Skeleton className="h-4 w-3/4" />
-                  <Skeleton className="h-4 w-1/2" />
-                </div>
-              ) : ingestionError ? (
-                <div className="text-muted-foreground flex items-center gap-2">
-                  <AlertCircle className="h-4 w-4 text-destructive" />
-                  <span>Could not retrieve ingestion status</span>
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <span className="text-muted-foreground block text-[11px]">
-                      Active Ingestion Run
-                    </span>
-                    <div>
-                      {ingestion?.activeRun ? (
-                        <Badge variant="outline" className="bg-amber-500/10 text-amber-600 text-[11px]">
-                          Running
-                        </Badge>
-                      ) : (
-                        <span className="font-medium text-foreground">Idle (None active)</span>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="space-y-1">
-                    <span className="text-muted-foreground block text-[11px]">
-                      Latest Snapshot
-                    </span>
-                    <div>
-                      {ingestion?.latestSnapshot ? (
-                        <div className="flex items-center gap-1.5">
-                          <Badge
-                            variant="outline"
-                            className={`text-[10px] uppercase font-mono ${getSnapshotBadgeVariant(
-                              ingestion.latestSnapshot.state
-                            )}`}
-                          >
-                            {ingestion.latestSnapshot.state}
-                          </Badge>
-                          <span className="font-mono text-[11px] text-muted-foreground truncate">
-                            {ingestion.latestSnapshot.id.slice(0, 8)}
-                          </span>
-                        </div>
-                      ) : (
-                        <span className="text-muted-foreground">None</span>
-                      )}
-                    </div>
-                  </div>
-
-                  {ingestion?.latestSuccessfulSnapshot && (
-                    <div className="col-span-2 space-y-1 pt-2 border-t">
-                      <span className="text-muted-foreground block text-[11px]">
-                        Latest Successful Snapshot
-                      </span>
-                      <div className="flex items-center justify-between text-muted-foreground">
-                        <span className="font-mono text-foreground font-medium">
-                          {ingestion.latestSuccessfulSnapshot.id}
-                        </span>
-                        <span>
-                          {formatDate(ingestion.latestSuccessfulSnapshot.publishedAt)}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          <IngestionActions projectCode={projectCode ?? ""} projectName={project?.name} />
+          <IngestionStatusPanel projectCode={projectCode ?? ""} compact />
 
           {/* Tabs for Sources and Snapshots */}
           <Tabs defaultValue="sources" className="w-full">
@@ -357,12 +282,9 @@ export function ProjectDetailSheet({
                             {snapshot.id}
                           </span>
                         </div>
-                        {snapshot.indexCapability && (
-                          <Badge variant="secondary" className="text-[10px]">
-                            {snapshot.indexCapability}
-                          </Badge>
-                        )}
                       </div>
+
+                      <SnapshotReadinessDisplay snapshot={snapshot} compact />
 
                       {snapshot.failureReason && (
                         <div className="rounded bg-destructive/10 p-2 text-destructive text-[11px] flex items-start gap-1.5">

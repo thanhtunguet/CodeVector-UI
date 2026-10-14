@@ -1,210 +1,114 @@
-import { useState } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { useTriggerIngest } from "@/hooks/useProjects";
-import { useToast } from "@/hooks/use-toast";
-import {
-  Play,
-  Loader2,
-  AlertCircle,
-  Sparkles,
-  GitBranch,
-  Database,
-  Layers,
-  CheckCircle2,
-} from "lucide-react";
+import { useEffect, useRef, useState } from 'react';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { useProjectSources } from '@/hooks/useProjects';
+import { useProjectIngestion, useRetryPipelineIngest, useTriggerPipelineIngest } from '@/hooks/useIngestion';
+import { isIngestionActive } from '@/hooks/ingestionQueries';
+import { useToast } from '@/hooks/use-toast';
+import type { IngestionOperationReceipt, PipelineIngestRequest } from '@/services/api';
+import { useRememberedOperation } from './useRememberedOperation';
+import { AlertCircle, Loader2, Play } from 'lucide-react';
 
+export type IngestionTarget = PipelineIngestRequest['pipeline'];
 interface TriggerIngestionDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   projectCode: string;
   projectName?: string;
-  onSuccess?: () => void;
+  pipeline?: IngestionTarget;
+  retryOfOperationId?: string;
+  onSuccess?: (receipt: IngestionOperationReceipt) => void;
 }
 
-export function TriggerIngestionDialog({
-  open,
-  onOpenChange,
-  projectCode,
-  projectName,
-  onSuccess,
-}: TriggerIngestionDialogProps) {
+export function TriggerIngestionDialog({ open, onOpenChange, projectCode, projectName, pipeline = 'source', retryOfOperationId, onSuccess }: TriggerIngestionDialogProps) {
   const [requireSemantic, setRequireSemantic] = useState(false);
+  const [requireDocumentSemantic, setRequireDocumentSemantic] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
-
+  const { remember } = useRememberedOperation(projectCode);
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  const requestKey = useRef<string | undefined>(undefined);
+  const context = useRef({ projectCode, pipeline, retryOfOperationId });
+  context.current = { projectCode, pipeline, retryOfOperationId };
+  const trigger = useTriggerPipelineIngest();
+  const retry = useRetryPipelineIngest();
+  const { data: sources, isPending: sourcesLoading, error: sourcesError } = useProjectSources(projectCode || undefined);
+  const { data: ingestion, isPending: statusLoading, error: statusError } = useProjectIngestion(projectCode || undefined);
   const { toast } = useToast();
-  const triggerIngestMutation = useTriggerIngest();
+  const pending = trigger.isPending || retry.isPending;
+  const busy = isIngestionActive(ingestion);
+  const label = pipeline === 'source' ? 'Source' : pipeline === 'docs' ? 'Docs' : 'Both';
+  useEffect(() => {
+    setRequireSemantic(false);
+    setRequireDocumentSemantic(false);
+    setApiError(null);
+    requestKey.current = undefined;
+  }, [projectCode, pipeline, retryOfOperationId, open]);
 
   const handleTrigger = async () => {
-    if (!projectCode) return;
-
+    if (!projectCode || pending || busy || !sources?.length) return;
+    const submitted = { projectCode, pipeline, retryOfOperationId };
+    const isCurrent = () => mounted.current && context.current.projectCode === submitted.projectCode
+      && context.current.pipeline === submitted.pipeline && context.current.retryOfOperationId === submitted.retryOfOperationId;
+    const input: PipelineIngestRequest = pipeline === 'source' ? { pipeline, requireSemantic }
+      : pipeline === 'docs' ? { pipeline, requireDocumentSemantic }
+      : { pipeline, requireSemantic, requireDocumentSemantic };
     try {
       setApiError(null);
-      await triggerIngestMutation.mutateAsync({
-        code: projectCode,
-        requireSemantic,
-      });
-
-      toast({
-        title: "Ingestion Queued",
-        description: `Ingestion job started for project "${projectCode}". Knowledge graph and snapshot are being constructed.`,
-      });
-
+      requestKey.current ??= crypto.randomUUID();
+      const receipt = retryOfOperationId && input.pipeline !== 'both'
+        ? await retry.mutateAsync({ code: projectCode, operationId: retryOfOperationId, input, requestKey: requestKey.current })
+        : await trigger.mutateAsync({ code: projectCode, input, requestKey: requestKey.current });
+      remember(receipt.operationId);
+      if (!isCurrent()) return;
+      toast({ title: `${label} ingestion queued`, description: `Operation ${receipt.operationId} for ${projectCode}.` });
+      onSuccess?.(receipt);
       onOpenChange(false);
-      onSuccess?.();
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Failed to trigger ingestion";
-      setApiError(msg);
+    } catch (error) {
+      if (isCurrent()) setApiError(error instanceof Error ? error.message : 'Could not start ingestion.');
     }
   };
 
-  return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        if (!next) setApiError(null);
-        onOpenChange(next);
-      }}
-    >
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-lg bg-primary/10 text-primary">
-              <Play className="h-5 w-5" />
-            </div>
-            <div>
-              <DialogTitle className="text-lg">Trigger Ingestion Run</DialogTitle>
-              <DialogDescription className="text-xs">
-                Start code intelligence analysis for{" "}
-                <span className="font-semibold text-foreground">
-                  {projectName ? `${projectName} (${projectCode})` : projectCode}
-                </span>
-                .
-              </DialogDescription>
-            </div>
-          </div>
-        </DialogHeader>
-
-        {apiError && (
-          <Alert variant="destructive" className="my-2">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription className="text-xs">{apiError}</AlertDescription>
-          </Alert>
-        )}
-
-        <div className="space-y-4 py-2">
-          {/* Ingestion Steps Explanation */}
-          <div className="rounded-lg border bg-muted/30 p-3 space-y-2.5">
-            <h4 className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-              <Layers className="h-3.5 w-3.5 text-primary" />
-              What happens during ingestion:
-            </h4>
-            <div className="grid grid-cols-1 gap-2 text-xs text-muted-foreground">
-              <div className="flex items-start gap-2">
-                <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">
-                  1
-                </div>
-                <span>
-                  <strong className="text-foreground">Source Inventory:</strong> Discovers files and checks Git metadata across all registered directories.
-                </span>
-              </div>
-              <div className="flex items-start gap-2">
-                <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">
-                  2
-                </div>
-                <span>
-                  <strong className="text-foreground">AST Analysis:</strong> Polyglot parser extracts functions, classes, interfaces, calls, and references.
-                </span>
-              </div>
-              <div className="flex items-start gap-2">
-                <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">
-                  3
-                </div>
-                <span>
-                  <strong className="text-foreground">Knowledge Graph:</strong> Cross-links dependencies and call hierarchies into Neo4j graph store.
-                </span>
-              </div>
-              <div className="flex items-start gap-2">
-                <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">
-                  4
-                </div>
-                <span>
-                  <strong className="text-foreground">Vector Embeddings:</strong> Chunks code & doc tokens and indexes them into Qdrant vector store.
-                </span>
-              </div>
-              <div className="flex items-start gap-2">
-                <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">
-                  5
-                </div>
-                <span>
-                  <strong className="text-foreground">Snapshot Release:</strong> Atomically transitions new immutable snapshot to published state.
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Semantic Requirement Switch */}
-          <div className="flex items-center justify-between space-x-3 rounded-lg border p-3 bg-card">
-            <div className="space-y-0.5">
-              <div className="flex items-center gap-1.5">
-                <Sparkles className="h-4 w-4 text-primary" />
-                <Label htmlFor="require-semantic" className="text-xs font-medium cursor-pointer">
-                  Require Semantic Indexing
-                </Label>
-              </div>
-              <p className="text-[11px] text-muted-foreground leading-relaxed">
-                If enabled, the run fails if embedding generation fails. If disabled, the run gracefully completes with structural indexing.
-              </p>
-            </div>
-            <Switch
-              id="require-semantic"
-              checked={requireSemantic}
-              onCheckedChange={setRequireSemantic}
-              disabled={triggerIngestMutation.isPending}
-            />
-          </div>
+  const updateStrictness = (set: (value: boolean) => void, value: boolean) => {
+    set(value);
+    requestKey.current = undefined;
+    setApiError(null);
+  };
+  return <Dialog open={open} onOpenChange={next => { if (!pending) onOpenChange(next); }}>
+    <DialogContent className="sm:max-w-lg">
+      <DialogHeader>
+        <DialogTitle className="text-lg">{retryOfOperationId ? 'Retry' : 'Ingest'} {label}</DialogTitle>
+        <DialogDescription className="text-xs">{projectName || projectCode} · {projectCode}</DialogDescription>
+      </DialogHeader>
+      <div className="space-y-3 py-2 text-xs">
+        <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+          {pipeline !== 'docs' && <p><strong>Source:</strong> Analyze code, relationships and code embeddings.</p>}
+          {pipeline !== 'source' && <p><strong>Docs:</strong> Capture and parse documents, then index document embeddings.</p>}
+          <p className="text-muted-foreground">All registered local directories are inspected. File ownership determines the pipeline, independently of registration kind. A pipeline with no eligible files fails without moving its published head.</p>
+          {pipeline === 'both' && <p className="text-muted-foreground">Source runs first, followed by Docs. Each child publishes independently; one child may succeed while the other fails.</p>}
         </div>
-
-        <DialogFooter className="gap-2 sm:gap-0">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-            disabled={triggerIngestMutation.isPending}
-            className="text-xs"
-          >
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            onClick={handleTrigger}
-            disabled={triggerIngestMutation.isPending || !projectCode}
-            className="gap-2 text-xs"
-          >
-            {triggerIngestMutation.isPending ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Triggering Ingestion...
-              </>
-            ) : (
-              <>
-                <Play className="h-4 w-4" />
-                Start Ingestion
-              </>
-            )}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
+        {pipeline !== 'docs' && <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
+          <div><Label htmlFor="require-source-semantic" className="text-xs">Require Source semantics</Label><p className="text-[11px] text-muted-foreground mt-1">Fail Source if code embeddings cannot be completed.</p></div>
+          <Switch id="require-source-semantic" checked={requireSemantic} onCheckedChange={value => updateStrictness(setRequireSemantic, value)} disabled={pending} />
+        </div>}
+        {pipeline !== 'source' && <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
+          <div><Label htmlFor="require-docs-semantic" className="text-xs">Require Docs semantics</Label><p className="text-[11px] text-muted-foreground mt-1">Fail Docs if document semantic coverage cannot be completed.</p></div>
+          <Switch id="require-docs-semantic" checked={requireDocumentSemantic} onCheckedChange={value => updateStrictness(setRequireDocumentSemantic, value)} disabled={pending} />
+        </div>}
+        {busy && <p role="status" className="text-amber-600 dark:text-amber-400">This project already has active or pending ingestion. Wait for it to finish or cancel it.</p>}
+        {!sourcesLoading && !sourcesError && !sources?.length && <p role="status" className="text-muted-foreground">No registered inputs. Register a local directory before ingesting.</p>}
+        {(apiError || sourcesError || statusError) && <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertDescription className="text-xs">{apiError || sourcesError?.message || statusError?.message}</AlertDescription></Alert>}
+      </div>
+      <DialogFooter className="gap-2">
+        <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={pending}>Close</Button>
+        <Button size="sm" className="gap-1.5 text-xs" onClick={handleTrigger} disabled={pending || busy || sourcesLoading || statusLoading || !!sourcesError || !!statusError || !sources?.length || !projectCode}>
+          {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+          {pending ? 'Submitting…' : `${retryOfOperationId ? 'Retry' : 'Ingest'} ${label}`}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>;
 }

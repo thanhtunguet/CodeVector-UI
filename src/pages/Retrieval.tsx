@@ -124,15 +124,17 @@ export function Retrieval() {
 
   // Fetch snapshots for project
   const { data: snapshots = [], isLoading: isSnapshotsLoading } =
-    useProjectSnapshots(selectedCode || undefined);
+    useProjectSnapshots(selectedCode || undefined, 'source');
 
   const publishedSnapshots = useMemo(
     () => snapshots.filter((s) => s.state === "published"),
     [snapshots]
   );
 
+  const invalidSnapshotSelection = selectedSnapshotId !== "latest" && !isSnapshotsLoading
+    && !publishedSnapshots.some((snapshot) => snapshot.id === selectedSnapshotId);
   const activeSnapshotParam =
-    selectedSnapshotId === "latest" ? undefined : selectedSnapshotId;
+    selectedSnapshotId === "latest" || invalidSnapshotSelection ? undefined : selectedSnapshotId;
 
   // Search Query Hook
   const {
@@ -149,7 +151,7 @@ export function Retrieval() {
     {
       limit,
       snapshotId: activeSnapshotParam,
-      enabled: Boolean(selectedCode && submittedQuery.trim().length > 0),
+      enabled: Boolean(selectedCode && submittedQuery.trim().length > 0 && !isSnapshotsLoading && !invalidSnapshotSelection),
     }
   );
 
@@ -195,6 +197,7 @@ export function Retrieval() {
 
   const handleSearchSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    if (isSnapshotsLoading || invalidSnapshotSelection) return;
     const trimmed = searchQueryInput.trim();
     setSubmittedQuery(trimmed);
     updateUrlParams({ q: trimmed, type: searchMode, snapshot: selectedSnapshotId });
@@ -286,7 +289,7 @@ export function Retrieval() {
             className="h-9 w-9"
             onClick={() => {
               refetchProjects();
-              if (submittedQuery) refetchSearch();
+              if (submittedQuery && !isSnapshotsLoading && !invalidSnapshotSelection) refetchSearch();
             }}
             title="Refresh"
           >
@@ -349,7 +352,7 @@ export function Retrieval() {
                 <span className="hidden sm:inline">Snapshot:</span>
               </div>
               <Select
-                value={selectedSnapshotId}
+                value={invalidSnapshotSelection ? undefined : selectedSnapshotId}
                 onValueChange={handleSnapshotChange}
                 disabled={isSnapshotsLoading}
               >
@@ -357,10 +360,10 @@ export function Retrieval() {
                   <SelectValue placeholder="Select snapshot" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="latest">Latest Published Snapshot</SelectItem>
+                  <SelectItem value="latest">Latest Published Source Snapshot</SelectItem>
                   {publishedSnapshots.map((snap) => (
                     <SelectItem key={snap.id} value={snap.id}>
-                      {snap.id.slice(0, 16)}... ({snap.indexCapability || "graph"})
+                      {snap.id.slice(0, 16)}... (graph: {snap.codeGraph?.state ?? 'unknown'}, semantics: {snap.codeSemantic?.state ?? 'unknown'})
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -423,7 +426,7 @@ export function Retrieval() {
 
             <Button
               type="submit"
-              disabled={isSearchFetching || !searchQueryInput.trim()}
+              disabled={isSearchFetching || invalidSnapshotSelection || !searchQueryInput.trim()}
               className="h-11 px-5 gap-2"
             >
               {isSearchFetching ? (
@@ -457,8 +460,14 @@ export function Retrieval() {
         </CardContent>
       </Card>
 
+      {invalidSnapshotSelection && <Alert className="border-amber-500/30 bg-amber-500/10 text-amber-900 dark:text-amber-200">
+        <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+        <AlertTitle className="font-semibold text-sm">Source snapshot unavailable</AlertTitle>
+        <AlertDescription className="text-xs mt-1">The selected snapshot is not a published Source snapshot for this project. Choose a Source snapshot or Latest Published Source Snapshot to search.</AlertDescription>
+      </Alert>}
+
       {/* Capability Unavailable Warning (e.g. 503 Semantic Search without embeddings) */}
-      {isCapabilityUnavailable && (
+      {!invalidSnapshotSelection && isCapabilityUnavailable && (
         <Alert className="border-amber-500/30 bg-amber-500/10 text-amber-900 dark:text-amber-200">
           <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
           <AlertTitle className="font-semibold text-sm">
@@ -494,7 +503,7 @@ export function Retrieval() {
       )}
 
       {/* Standard Search Error (non-capability) */}
-      {isSearchError && !isCapabilityUnavailable && (
+      {!invalidSnapshotSelection && isSearchError && !isCapabilityUnavailable && (
         <Alert variant="destructive">
           <AlertCircle className="h-5 w-5" />
           <AlertTitle className="font-semibold text-sm">Search Request Failed</AlertTitle>
@@ -505,7 +514,7 @@ export function Retrieval() {
       )}
 
       {/* Results Header Info Bar */}
-      {submittedQuery && !isSearchError && (
+      {submittedQuery && !isSearchError && !invalidSnapshotSelection && (
         <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-medium text-foreground">
@@ -532,7 +541,9 @@ export function Retrieval() {
 
       {/* Results Section */}
       <Card className="shadow-sm overflow-hidden">
-        {isSearchLoading ? (
+        {invalidSnapshotSelection ? (
+          <div className="p-6 text-center text-xs text-muted-foreground">Select a published Source snapshot to view code retrieval results.</div>
+        ) : isSearchLoading ? (
           <div className="p-6 space-y-4">
             <div className="flex items-center justify-between pb-2 border-b">
               <Skeleton className="h-4 w-32" />

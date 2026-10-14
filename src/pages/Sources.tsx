@@ -54,7 +54,8 @@ import {
 import { useProjectSelection } from "@/hooks/useSources";
 import { useToast } from "@/hooks/use-toast";
 import { RegisterSourceDialog } from "@/components/sources/RegisterSourceDialog";
-import { TriggerIngestionDialog } from "@/components/sources/TriggerIngestionDialog";
+import { IngestionActions } from "@/components/sources/IngestionActions";
+import { IngestionStatusPanel } from "@/components/sources/IngestionStatusPanel";
 import type { Snapshot, Source } from "@/services/api";
 import { format } from "date-fns";
 
@@ -83,7 +84,6 @@ export function Sources() {
   const [searchFilter, setSearchFilter] = useState("");
   const [kindFilter, setKindFilter] = useState<"all" | "repository" | "documentation">("all");
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
-  const [isTriggerOpen, setIsTriggerOpen] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // Sources query for selected project
@@ -240,26 +240,7 @@ export function Sources() {
             <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
           </Button>
 
-          {/* Trigger Ingestion Action */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setIsTriggerOpen(true)}
-            disabled={!selectedCode || Boolean(ingestion?.activeRun)}
-            className="h-9 gap-1.5 text-xs bg-primary/5 hover:bg-primary/10 border-primary/20 text-primary hover:text-primary"
-          >
-            {ingestion?.activeRun ? (
-              <>
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                Ingesting...
-              </>
-            ) : (
-              <>
-                <Play className="h-3.5 w-3.5" />
-                Trigger Ingestion
-              </>
-            )}
-          </Button>
+          <IngestionActions projectCode={selectedCode} projectName={selectedProject?.name} />
 
           {/* Register Source Action */}
           <Button
@@ -274,80 +255,10 @@ export function Sources() {
         </div>
       </div>
 
-      {/* Live Ingestion Banner / Alerts */}
-      {ingestion?.activeRun ? (
-        <div className="relative overflow-hidden rounded-xl border border-primary/40 bg-primary/5 p-4 sm:p-5 shadow-xs transition-all">
-          <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-primary/10 to-primary/5 animate-pulse" />
-          <div className="relative flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-start gap-3.5">
-              <div className="p-2.5 rounded-xl bg-primary/20 text-primary">
-                <RefreshCw className="h-5 w-5 animate-spin" />
-              </div>
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <h3 className="text-sm font-semibold text-foreground">
-                    Ingestion in Progress...
-                  </h3>
-                  <Badge
-                    variant="outline"
-                    className="bg-primary/20 text-primary border-primary/30 text-[10px] animate-pulse"
-                  >
-                    Active Run
-                  </Badge>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Analyzing AST, resolving relationships, computing embeddings.
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 self-start sm:self-center">
-              <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-background/80 border text-[11px] text-muted-foreground">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
-                </span>
-                Polling every 2s
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : ingestion?.latestSnapshot?.state === "failed" ? (
-        <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 sm:p-5 shadow-xs">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-start gap-3.5">
-              <div className="p-2.5 rounded-xl bg-destructive/10 text-destructive">
-                <AlertTriangle className="h-5 w-5" />
-              </div>
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <h3 className="text-sm font-semibold text-destructive">
-                    Latest Ingestion Run Failed
-                  </h3>
-                  <Badge variant="destructive" className="text-[10px]">
-                    Failed
-                  </Badge>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {ingestion.latestSnapshot.failureReason ||
-                    "An unexpected error occurred during indexing or graph resolution."}
-                </p>
-              </div>
-            </div>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setIsTriggerOpen(true)}
-              className="border-destructive/30 text-destructive hover:bg-destructive/10 gap-1.5 text-xs self-start sm:self-center"
-            >
-              <Play className="h-3.5 w-3.5" />
-              Re-trigger Ingestion
-            </Button>
-          </div>
-        </div>
-      ) : null}
+      <IngestionStatusPanel projectCode={selectedCode} />
 
       {/* Summary Counters */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="max-w-sm">
         {/* Total Sources */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -374,89 +285,7 @@ export function Sources() {
           </CardContent>
         </Card>
 
-        {/* Active Runs */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs font-medium text-muted-foreground">
-              Active Runs
-            </CardTitle>
-            <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-              <Activity className="h-4 w-4" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            {isIngestionLoading ? (
-              <Skeleton className="h-7 w-16" />
-            ) : (
-              <div className="flex items-center gap-2">
-                <span className="text-2xl font-bold">
-                  {ingestion?.activeRun ? "1" : "0"}
-                </span>
-                <Badge
-                  variant="outline"
-                  className={
-                    ingestion?.activeRun
-                      ? "bg-amber-500/10 text-amber-600 border-amber-500/20 text-[10px]"
-                      : "bg-muted text-muted-foreground text-[10px]"
-                  }
-                >
-                  {ingestion?.activeRun ? "Running" : "Idle"}
-                </Badge>
-              </div>
-            )}
-            <p className="text-[11px] text-muted-foreground mt-1 truncate">
-              {ingestion?.latestSuccessfulSnapshot?.publishedAt
-                ? `Published ${formatDate(ingestion.latestSuccessfulSnapshot.publishedAt)}`
-                : "No published snapshots"}
-            </p>
-          </CardContent>
-        </Card>
 
-        {/* Latest Snapshot State */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs font-medium text-muted-foreground">
-              Latest Snapshot
-            </CardTitle>
-            <div className="p-2 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400">
-              <History className="h-4 w-4" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            {isIngestionLoading ? (
-              <Skeleton className="h-7 w-24" />
-            ) : (
-              <div className="flex items-center gap-2">
-                {ingestion?.latestSnapshot ? (
-                  <>
-                    <Badge
-                      variant="outline"
-                      className={`text-[10px] uppercase font-mono ${getSnapshotBadgeClass(
-                        ingestion.latestSnapshot.state
-                      )}`}
-                    >
-                      {ingestion.latestSnapshot.state}
-                    </Badge>
-                    <code className="text-xs font-mono text-muted-foreground truncate">
-                      {ingestion.latestSnapshot.id.slice(0, 8)}
-                    </code>
-                  </>
-                ) : (
-                  <span className="text-base font-semibold text-muted-foreground">None</span>
-                )}
-              </div>
-            )}
-            <p className="text-[11px] text-muted-foreground mt-1">
-              {ingestion?.latestSuccessfulSnapshot?.indexCapability ? (
-                <span className="capitalize">
-                  Capability: {ingestion.latestSuccessfulSnapshot.indexCapability}
-                </span>
-              ) : (
-                "Awaiting first index build"
-              )}
-            </p>
-          </CardContent>
-        </Card>
       </div>
 
       {/* Sources Management Section */}
@@ -684,15 +513,7 @@ export function Sources() {
         }}
       />
 
-      <TriggerIngestionDialog
-        open={isTriggerOpen}
-        onOpenChange={setIsTriggerOpen}
-        projectCode={selectedCode}
-        projectName={selectedProject?.name}
-        onSuccess={() => {
-          refetchIngestion();
-        }}
-      />
+
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import {
   History,
@@ -14,9 +14,6 @@ import {
   AlertTriangle,
   AlertCircle,
   Clock,
-  Sparkles,
-  GitBranch,
-  FileCode,
   Layers,
   Activity,
   Trash2,
@@ -26,6 +23,8 @@ import {
   Cpu,
   ArrowRight,
 } from "lucide-react";
+import { IngestionActions } from "@/components/sources/IngestionActions";
+import { IngestionStatusPanel } from "@/components/sources/IngestionStatusPanel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -81,6 +80,8 @@ import {
 import { useProjectSelection } from "@/hooks/useSources";
 import { useToast } from "@/hooks/use-toast";
 import { SnapshotDetailSheet } from "@/components/snapshots/SnapshotDetailSheet";
+import { SnapshotReadinessDisplay } from "@/components/snapshots/SnapshotReadinessDisplay";
+import { snapshotReadinessRows } from "@/components/snapshots/snapshotReadiness";
 import { WorkerEventPanel } from "@/components/worker/WorkerEventPanel";
 import { CleanupSnapshotsDialog } from "@/components/snapshots/CleanupSnapshotsDialog";
 import type { Snapshot } from "@/services/api";
@@ -122,6 +123,7 @@ export function Snapshots() {
   // Filters & UI State
   const [searchFilter, setSearchFilter] = useState("");
   const [stateFilter, setStateFilter] = useState<"all" | "published" | "building" | "failed">("all");
+  const [pipelineFilter, setPipelineFilter] = useState<"all" | "source" | "docs" | "mixed">("all");
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // Modal / Sheet State
@@ -145,6 +147,14 @@ export function Snapshots() {
     refetch: refetchIngestion,
   } = useProjectIngestion(selectedCode || undefined);
   const deleteSnapshotMutation = useDeleteSnapshot();
+
+  useEffect(() => {
+    setSelectedSnapshot(null);
+    setSnapshotToDelete(null);
+    setIsDetailSheetOpen(false);
+    setIsCleanupOpen(false);
+    setCopiedId(null);
+  }, [selectedCode]);
 
   const isRefreshing = isSnapshotsRefetching || isIngestionRefetching;
 
@@ -208,18 +218,6 @@ export function Snapshots() {
     };
   }, [snapshots]);
 
-  // Active / Latest Published Snapshot
-  const latestPublished = useMemo(() => {
-    if (ingestion?.published) {
-      return ingestion.published;
-    }
-    if (ingestion?.latestSuccessfulSnapshot) {
-      return ingestion.latestSuccessfulSnapshot;
-    }
-    if (!snapshots) return null;
-    return snapshots.find((s) => s.state === "published") ?? null;
-  }, [ingestion, snapshots]);
-
   // Filtered and sorted snapshots
   const filteredSnapshots = useMemo(() => {
     if (!snapshots) return [];
@@ -232,10 +230,11 @@ export function Snapshots() {
           s.id.toLowerCase().includes(query) ||
           (s.embeddingModelId && s.embeddingModelId.toLowerCase().includes(query)) ||
           (s.failureReason && s.failureReason.toLowerCase().includes(query));
-        return matchesState && matchesSearch;
+        const matchesPipeline = pipelineFilter === "all" || (s.pipeline ?? "mixed") === pipelineFilter;
+        return matchesState && matchesSearch && matchesPipeline;
       })
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }, [snapshots, stateFilter, searchFilter]);
+  }, [snapshots, stateFilter, searchFilter, pipelineFilter]);
 
   // Badge helper
   const getSnapshotBadge = (state: Snapshot["state"]) => {
@@ -265,42 +264,6 @@ export function Snapshots() {
           className: "bg-muted text-muted-foreground",
         };
     }
-  };
-
-  // Capability badge helper
-  const getCapabilityBadge = (capability?: string) => {
-    const normalized = capability?.toLowerCase();
-    if (normalized === "full" || normalized === "semantic") {
-      return (
-        <Badge
-          variant="outline"
-          className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-[10px] font-mono flex items-center gap-1"
-        >
-          <Sparkles className="h-3 w-3" />
-          Semantic
-        </Badge>
-      );
-    }
-    if (normalized === "graph_only" || normalized === "syntax") {
-      return (
-        <Badge
-          variant="outline"
-          className="bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20 text-[10px] font-mono flex items-center gap-1"
-        >
-          <GitBranch className="h-3 w-3" />
-          Syntax
-        </Badge>
-      );
-    }
-    return (
-      <Badge
-        variant="outline"
-        className="bg-muted text-muted-foreground border-border text-[10px] font-mono flex items-center gap-1"
-      >
-        <FileCode className="h-3 w-3" />
-        Text
-      </Badge>
-    );
   };
 
   // Zero projects empty state
@@ -381,6 +344,8 @@ export function Snapshots() {
             <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
           </Button>
 
+          <IngestionActions projectCode={selectedCode} projectName={selectedProject?.name} />
+
           {/* Cleanup Old Snapshots Action */}
           <Button
             variant="outline"
@@ -396,7 +361,7 @@ export function Snapshots() {
       </div>
 
       {/* Summary Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="max-w-sm">
         {/* Card 1: Total Snapshots */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
@@ -434,103 +399,9 @@ export function Snapshots() {
           </CardContent>
         </Card>
 
-        {/* Card 2: Active / Latest Published Snapshot */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-            <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-              Active Published Snapshot
-            </CardTitle>
-            <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-              <Sparkles className="h-4 w-4" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            {isSnapshotsLoading || isIngestionLoading ? (
-              <div className="space-y-2">
-                <Skeleton className="h-5 w-28" />
-                <Skeleton className="h-4 w-36" />
-              </div>
-            ) : latestPublished ? (
-              <div className="space-y-1.5">
-                <div className="flex items-center gap-2">
-                  <code className="font-mono text-sm font-semibold text-foreground">
-                    {latestPublished.id.slice(0, 8)}...
-                  </code>
-                  {getCapabilityBadge(latestPublished.indexCapability)}
-                </div>
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <Clock className="h-3.5 w-3.5" />
-                  <span>Published {formatRelativeTime(latestPublished.publishedAt)}</span>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-1">
-                <span className="text-sm font-medium text-muted-foreground">No published snapshot</span>
-                <p className="text-[11px] text-muted-foreground">
-                  Trigger ingestion to build and publish a snapshot.
-                </p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Card 3: Active Ingestion Run Status */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-            <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-              Ingestion Run Status
-            </CardTitle>
-            <div
-              className={`p-2 rounded-lg ${
-                ingestion?.activeRun
-                  ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 animate-pulse"
-                  : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-              }`}
-            >
-              <Activity className="h-4 w-4" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            {isIngestionLoading ? (
-              <Skeleton className="h-8 w-24 mb-2" />
-            ) : ingestion?.activeRun ? (
-              <div className="space-y-1.5">
-                <div className="flex items-center gap-2">
-                  <Badge
-                    variant="outline"
-                    className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 text-xs font-semibold gap-1.5 uppercase font-mono"
-                  >
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    Active Run
-                  </Badge>
-                  <span className="text-xs text-muted-foreground font-mono">
-                    {ingestion.activeRun.id ? ingestion.activeRun.id.slice(0, 8) : "running"}
-                  </span>
-                </div>
-                <p className="text-[11px] text-muted-foreground flex items-center gap-1">
-                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-ping inline-block" />
-                  Live indexing & vectorization in progress (polling 2s)
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-1.5">
-                <div className="flex items-center gap-2">
-                  <Badge
-                    variant="outline"
-                    className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-xs font-medium gap-1.5"
-                  >
-                    <span className="h-2 w-2 rounded-full bg-emerald-500 inline-block" />
-                    Engine Idle
-                  </Badge>
-                </div>
-                <p className="text-[11px] text-muted-foreground">
-                  Ready to trigger new graph or semantic builds.
-                </p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
       </div>
+
+      <IngestionStatusPanel projectCode={selectedCode} />
 
       {/* Filter Controls & Search */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-card p-3 rounded-lg border">
@@ -546,6 +417,15 @@ export function Snapshots() {
 
         <div className="flex items-center gap-2">
           <SlidersHorizontal className="h-3.5 w-3.5 text-muted-foreground" />
+          <Select value={pipelineFilter} onValueChange={value => setPipelineFilter(value as typeof pipelineFilter)}>
+            <SelectTrigger className="h-9 w-36 text-xs" aria-label="Filter by pipeline"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All pipelines</SelectItem>
+              <SelectItem value="source">Source</SelectItem>
+              <SelectItem value="docs">Docs</SelectItem>
+              <SelectItem value="mixed">Legacy mixed</SelectItem>
+            </SelectContent>
+          </Select>
           <Select
             value={stateFilter}
             onValueChange={(val) => setStateFilter(val as "all" | "published" | "building" | "failed")}
@@ -623,6 +503,7 @@ export function Snapshots() {
                 onClick={() => {
                   setSearchFilter("");
                   setStateFilter("all");
+                  setPipelineFilter("all");
                 }}
                 className="mt-2 text-xs"
               >
@@ -635,8 +516,9 @@ export function Snapshots() {
                 <TableHeader>
                   <TableRow className="bg-muted/40 hover:bg-muted/40">
                     <TableHead className="w-[120px] text-xs">State</TableHead>
+                    <TableHead className="text-xs">Pipeline / operation</TableHead>
                     <TableHead className="text-xs">Snapshot ID</TableHead>
-                    <TableHead className="text-xs">Capability & Vector Model</TableHead>
+                    <TableHead className="text-xs">Readiness & Vector Model</TableHead>
                     <TableHead className="text-xs">Created At</TableHead>
                     <TableHead className="text-xs">Published At</TableHead>
                     <TableHead className="text-xs">Notes / Failure</TableHead>
@@ -647,6 +529,7 @@ export function Snapshots() {
                   {filteredSnapshots.map((snap) => {
                     const badge = getSnapshotBadge(snap.state);
                     const isCopied = copiedId === snap.id;
+                    const readinessReasons = snapshotReadinessRows(snap).flatMap(({ label, readiness }) => readiness?.reason ? [`${label}: ${readiness.reason}`] : []);
 
                     return (
                       <TableRow key={snap.id} className="hover:bg-muted/30">
@@ -659,6 +542,12 @@ export function Snapshots() {
                             {badge.icon}
                             {badge.label}
                           </Badge>
+                        </TableCell>
+
+                        <TableCell className="py-3 text-xs">
+                          <Badge variant="secondary" className="text-[10px]">{snap.pipeline === 'source' ? 'Source' : snap.pipeline === 'docs' ? 'Docs' : snap.pipeline === 'mixed' ? 'Legacy mixed' : 'Unknown (legacy)'}</Badge>
+                          {snap.operationId && <code className="block mt-1 text-[10px] text-muted-foreground break-all" title={snap.operationId}>Operation {snap.operationId}</code>}
+                          {(['source', 'docs'] as const).filter(pipeline => ingestion?.pipelines?.[pipeline]?.headId === snap.id).map(pipeline => <span key={pipeline} className="block mt-1 text-[10px] text-emerald-600 dark:text-emerald-400">Current {pipeline === 'source' ? 'Source' : 'Docs'} head</span>)}
                         </TableCell>
 
                         {/* Snapshot ID with copy */}
@@ -692,17 +581,11 @@ export function Snapshots() {
                           </div>
                         </TableCell>
 
-                        {/* Capability & Model info */}
+                        {/* Domain readiness & model info */}
                         <TableCell className="py-3">
                           <div className="flex flex-col gap-1">
-                            <div className="flex items-center gap-2">
-                              {getCapabilityBadge(snap.indexCapability)}
-                              {snap.embeddingDimensions && (
-                                <span className="font-mono text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-                                  {snap.embeddingDimensions}d
-                                </span>
-                              )}
-                            </div>
+                            <SnapshotReadinessDisplay snapshot={snap} compact showPipeline={false} />
+                            {snap.embeddingDimensions && <span className="font-mono text-[10px] text-muted-foreground">{snap.embeddingDimensions}d</span>}
                             {snap.embeddingModelId && (
                               <div className="flex items-center gap-1 text-[11px] text-muted-foreground font-mono truncate max-w-[200px]" title={snap.embeddingModelId}>
                                 <Cpu className="h-3 w-3 flex-shrink-0" />
@@ -740,9 +623,9 @@ export function Snapshots() {
                                 {snap.failureReason}
                               </TooltipContent>
                             </Tooltip>
-                          ) : snap.indexCapabilityReason ? (
-                            <span className="text-[11px] text-amber-600 dark:text-amber-400 font-mono">
-                              {snap.indexCapabilityReason}
+                          ) : readinessReasons.length ? (
+                            <span className="text-[11px] text-amber-600 dark:text-amber-400 font-mono" title={readinessReasons.join(' · ')}>
+                              {readinessReasons[0]}
                             </span>
                           ) : (
                             <span className="text-muted-foreground text-xs">—</span>
@@ -795,14 +678,18 @@ export function Snapshots() {
         </CardContent>
       </Card>
 
-      {selectedCode && ingestion?.activeRun && (
+      {selectedCode && [...new Map([
+        ...(ingestion?.activeRun ? [ingestion.activeRun] : []),
+        ...Object.values(ingestion?.pipelines ?? {}).flatMap(pipeline => pipeline.activeRun ? [pipeline.activeRun] : []),
+      ].map(run => [run.id, run])).values()].map(run => (
         <WorkerEventPanel
+          key={run.id}
           projectCode={selectedCode}
-          runId={ingestion.activeRun.id}
-          activeRun={ingestion.activeRun}
-          title="Active ingestion worker log"
+          runId={run.id}
+          activeRun={run}
+          title={`${run.executionKind === 'docs' ? 'Docs' : run.executionKind === 'source' ? 'Source' : 'Legacy mixed'} ingestion worker log`}
         />
-      )}
+      ))}
 
       {/* Slide-over Inspection Sheet */}
       <SnapshotDetailSheet

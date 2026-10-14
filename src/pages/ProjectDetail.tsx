@@ -49,9 +49,11 @@ import {
   useProjectIngestion,
   useProjectSources,
   useProjectSnapshots,
-  useTriggerIngest,
   useSearchProject,
 } from "@/hooks/useProjects";
+import { IngestionActions } from "@/components/sources/IngestionActions";
+import { IngestionStatusPanel } from "@/components/sources/IngestionStatusPanel";
+import { SnapshotReadinessDisplay } from "@/components/snapshots/SnapshotReadinessDisplay";
 import { useToast } from "@/hooks/use-toast";
 import { EditProjectSheet } from "@/components/projects/EditProjectSheet";
 import { DeleteProjectDialog } from "@/components/projects/DeleteProjectDialog";
@@ -112,7 +114,6 @@ export function ProjectDetail() {
     refetch: refetchSnapshots,
   } = useProjectSnapshots(code);
 
-  const triggerIngestMutation = useTriggerIngest();
 
   const {
     data: searchResults,
@@ -131,26 +132,6 @@ export function ProjectDetail() {
       description: `Project code "${code}" copied to clipboard.`,
     });
     setTimeout(() => setCopiedCode(false), 2000);
-  };
-
-  const handleTriggerIngest = async () => {
-    if (!code) return;
-    try {
-      await triggerIngestMutation.mutateAsync({ code });
-      toast({
-        title: "Ingestion started",
-        description: `Ingestion run queued for project "${code}".`,
-      });
-      refetchIngestion();
-      refetchSnapshots();
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Failed to trigger ingestion";
-      toast({
-        variant: "destructive",
-        title: "Ingestion Failed",
-        description: msg,
-      });
-    }
   };
 
   const handleSearchSubmit = (e: React.FormEvent) => {
@@ -262,20 +243,7 @@ export function ProjectDetail() {
             Edit Info
           </Button>
 
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleTriggerIngest}
-            disabled={triggerIngestMutation.isPending}
-            className="gap-1.5 bg-primary/5 hover:bg-primary/10 border-primary/20 text-primary hover:text-primary"
-          >
-            {triggerIngestMutation.isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Play className="h-4 w-4" />
-            )}
-            Trigger Ingestion
-          </Button>
+          <IngestionActions projectCode={project.code} projectName={project.name} />
 
           <Button
             variant="outline"
@@ -289,109 +257,7 @@ export function ProjectDetail() {
         </div>
       </div>
 
-      {/* Ingestion & Index Capability Status Card */}
-      <Card className="shadow-xs">
-        <CardHeader className="py-4 px-6 flex flex-row items-center justify-between space-y-0 border-b">
-          <div className="flex items-center gap-2">
-            <Activity className="h-4 w-4 text-primary" />
-            <CardTitle className="text-sm font-semibold">
-              Ingestion & Intelligence Status
-            </CardTitle>
-          </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 w-8 p-0"
-            onClick={() => {
-              refetchIngestion();
-              refetchSnapshots();
-            }}
-            title="Refresh status"
-          >
-            <RefreshCw className="h-3.5 w-3.5" />
-          </Button>
-        </CardHeader>
-        <CardContent className="p-6">
-          {isIngestionLoading ? (
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <Skeleton className="h-14 w-full" />
-              <Skeleton className="h-14 w-full" />
-              <Skeleton className="h-14 w-full" />
-              <Skeleton className="h-14 w-full" />
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              {/* Active Run */}
-              <div className="space-y-1">
-                <span className="text-xs text-muted-foreground font-medium block">
-                  Active Run
-                </span>
-                <div>
-                  {ingestion?.activeRun ? (
-                    <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/20 text-xs">
-                      Running Ingestion
-                    </Badge>
-                  ) : (
-                    <span className="text-sm font-medium text-foreground">Idle</span>
-                  )}
-                </div>
-              </div>
-
-              {/* Latest Snapshot */}
-              <div className="space-y-1">
-                <span className="text-xs text-muted-foreground font-medium block">
-                  Latest Snapshot
-                </span>
-                <div>
-                  {ingestion?.latestSnapshot ? (
-                    <div className="flex items-center gap-2">
-                      <Badge
-                        variant="outline"
-                        className={`text-[10px] uppercase font-mono ${getSnapshotBadgeVariant(
-                          ingestion.latestSnapshot.state
-                        )}`}
-                      >
-                        {ingestion.latestSnapshot.state}
-                      </Badge>
-                      <code className="text-xs font-mono text-muted-foreground truncate">
-                        {ingestion.latestSnapshot.id.slice(0, 8)}
-                      </code>
-                    </div>
-                  ) : (
-                    <span className="text-sm text-muted-foreground">None</span>
-                  )}
-                </div>
-              </div>
-
-              {/* Capability */}
-              <div className="space-y-1">
-                <span className="text-xs text-muted-foreground font-medium block">
-                  Index Capability
-                </span>
-                <div>
-                  {ingestion?.latestSuccessfulSnapshot?.indexCapability ? (
-                    <Badge variant="secondary" className="capitalize text-xs">
-                      {ingestion.latestSuccessfulSnapshot.indexCapability}
-                    </Badge>
-                  ) : (
-                    <span className="text-sm text-muted-foreground">Not indexed</span>
-                  )}
-                </div>
-              </div>
-
-              {/* Published At */}
-              <div className="space-y-1">
-                <span className="text-xs text-muted-foreground font-medium block">
-                  Last Published
-                </span>
-                <span className="text-xs text-foreground block truncate">
-                  {formatDate(ingestion?.latestSuccessfulSnapshot?.publishedAt)}
-                </span>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <IngestionStatusPanel projectCode={project.code} />
 
       {/* Tabs Section */}
       <Tabs defaultValue="sources" className="w-full">
@@ -537,15 +403,7 @@ export function ProjectDetail() {
                     Trigger an ingestion run to parse sources and generate the first code intelligence snapshot.
                   </p>
                 </div>
-                <Button
-                  size="sm"
-                  onClick={handleTriggerIngest}
-                  disabled={triggerIngestMutation.isPending}
-                  className="gap-1.5 text-xs"
-                >
-                  <Play className="h-3.5 w-3.5" />
-                  Run First Ingestion
-                </Button>
+                <IngestionActions projectCode={project.code} projectName={project.name} />
               </CardContent>
             </Card>
           ) : (
@@ -555,7 +413,7 @@ export function ProjectDetail() {
                   <TableRow>
                     <TableHead>Snapshot ID</TableHead>
                     <TableHead>State</TableHead>
-                    <TableHead>Capability</TableHead>
+                    <TableHead>Readiness</TableHead>
                     <TableHead>Created At</TableHead>
                     <TableHead>Published At</TableHead>
                     <TableHead>Notes</TableHead>
@@ -578,13 +436,7 @@ export function ProjectDetail() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-xs">
-                        {snap.indexCapability ? (
-                          <Badge variant="secondary" className="capitalize text-[10px]">
-                            {snap.indexCapability}
-                          </Badge>
-                        ) : (
-                          <span className="text-muted-foreground text-xs">—</span>
-                        )}
+                        <SnapshotReadinessDisplay snapshot={snap} compact />
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">
                         {formatDate(snap.createdAt)}

@@ -13,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useProjectSnapshot } from "@/hooks/useProjects";
 import { WorkerEventPanel } from "@/components/worker/WorkerEventPanel";
+import { SnapshotReadinessDisplay } from "./SnapshotReadinessDisplay";
 import type { Snapshot } from "@/services/api";
 import { format } from "date-fns";
 import {
@@ -22,8 +23,6 @@ import {
   AlertCircle,
   Clock,
   Sparkles,
-  GitBranch,
-  FileCode,
   Layers,
   Cpu,
   Hash,
@@ -122,50 +121,7 @@ export function SnapshotDetailSheet({
     }
   };
 
-  const getCapabilityInfo = (capability?: string) => {
-    const normalized = capability?.toLowerCase();
-    if (normalized === "full" || normalized === "semantic") {
-      return {
-        badge: "Semantic & Graph",
-        badgeVariant: "default",
-        badgeClass: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30",
-        description: "Vector embeddings and code intelligence knowledge graph are fully indexed and queryable.",
-        icon: <Sparkles className="h-4 w-4 text-emerald-500" />,
-      };
-    }
-    if (normalized === "graph_only" || normalized === "syntax") {
-      return {
-        badge: "Graph & Syntax",
-        badgeVariant: "secondary",
-        badgeClass: "bg-cyan-500/15 text-cyan-700 dark:text-cyan-400 border-cyan-500/30",
-        description: "AST symbol graphs and call hierarchies are indexed; vector semantic search is unconfigured or bypassed.",
-        icon: <GitBranch className="h-4 w-4 text-cyan-500" />,
-      };
-    }
-    return {
-      badge: "Text & Metadata",
-      badgeVariant: "outline",
-      badgeClass: "bg-muted text-muted-foreground border-border",
-      description: "Basic textual lookup and source metadata only. Graph and semantic capabilities unavailable.",
-      icon: <FileCode className="h-4 w-4 text-muted-foreground" />,
-    };
-  };
-
-  const getReasonMessage = (reason?: string) => {
-    if (!reason) return null;
-    switch (reason) {
-      case "embedding_not_configured":
-        return "Embedding provider was not configured in environment settings when this snapshot was indexed.";
-      case "embedding_unavailable":
-        return "Embedding service was unreachable or returned errors during indexing, so vector embedding was skipped.";
-      default:
-        return reason;
-    }
-  };
-
   const stateBadge = getSnapshotBadge(activeSnapshot?.state);
-  const capInfo = getCapabilityInfo(activeSnapshot?.indexCapability);
-  const reasonMessage = getReasonMessage(activeSnapshot?.indexCapabilityReason);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -286,42 +242,16 @@ export function SnapshotDetailSheet({
                 </CardContent>
               </Card>
 
-              {/* Capability & Vector Parameters Card */}
+              {/* Domain Readiness & Vector Parameters Card */}
               <Card>
                 <CardHeader className="py-3 px-4 border-b bg-muted/20">
                   <CardTitle className="text-xs font-semibold uppercase tracking-wider flex items-center gap-2">
                     <Sparkles className="h-3.5 w-3.5 text-primary" />
-                    Index Capability & Vector Dimensions
+                    Pipeline Readiness & Vector Dimensions
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-4 space-y-4 text-xs">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <span className="text-muted-foreground block text-[11px] mb-1">Capability Level</span>
-                      <div className="flex items-center gap-2">
-                        <Badge
-                          variant="outline"
-                          className={`font-semibold text-xs py-0.5 px-2 flex items-center gap-1.5 ${capInfo.badgeClass}`}
-                        >
-                          {capInfo.icon}
-                          {capInfo.badge}
-                        </Badge>
-                        <span className="font-mono text-[11px] text-muted-foreground">
-                          ({activeSnapshot.indexCapability || "default"})
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-muted-foreground mt-1.5 leading-relaxed">
-                        {capInfo.description}
-                      </p>
-                    </div>
-                  </div>
-
-                  {reasonMessage && (
-                    <div className="rounded-md border border-amber-500/20 bg-amber-500/5 p-2.5 text-xs text-amber-700 dark:text-amber-400">
-                      <span className="font-semibold block text-[11px] mb-0.5">Capability Note:</span>
-                      {reasonMessage}
-                    </div>
-                  )}
+                  <SnapshotReadinessDisplay snapshot={activeSnapshot} />
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t">
                     <div className="rounded-lg bg-muted/40 p-3">
