@@ -22,6 +22,8 @@ import {
   HelpCircle,
   Info,
   Layers,
+  Loader2,
+  MinusCircle,
   Network,
   Presentation,
   RefreshCw,
@@ -65,11 +67,19 @@ import {
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   useAnalyzerCatalog,
   useCapabilities,
   useDocumentParserCatalog,
   useSystemHealth,
 } from '@/hooks/useSettings';
+import { useProjects } from '@/hooks/useProjects';
 import { useToast } from '@/hooks/use-toast';
 import { WorkerEventPanel } from '@/components/worker/WorkerEventPanel';
 import type {
@@ -77,6 +87,7 @@ import type {
   DependencyProbeReport,
   DependencyProbeStatus,
   DocumentParserCatalogEntry,
+  Project,
 } from '@/services/api';
 import { format } from 'date-fns';
 
@@ -122,6 +133,9 @@ export default function Settings() {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<string>('overview');
   const [copiedDiag, setCopiedDiag] = useState(false);
+  const [selectedProjectCode, setSelectedProjectCode] = useState<string>('');
+
+  const { data: projects = [], isLoading: isProjectsLoading } = useProjects();
 
   const {
     data: health,
@@ -150,7 +164,7 @@ export default function Settings() {
     isLoading: isParserCatalogLoading,
     isFetching: isParserCatalogFetching,
     refetch: refetchParserCatalog,
-  } = useDocumentParserCatalog();
+  } = useDocumentParserCatalog(selectedProjectCode || undefined);
 
   const isRefreshing =
     isHealthFetching || isCapFetching || isAnalyzerCatalogFetching || isParserCatalogFetching;
@@ -483,7 +497,14 @@ export default function Settings() {
 
           <AdaptersSection adapters={adapterList} isLoading={isAnalyzerCatalogLoading} />
 
-          <DocumentParsersSection parsers={parserCatalog || []} isLoading={isParserCatalogLoading} />
+          <DocumentParsersSection
+            parsers={parserCatalog || []}
+            isLoading={isParserCatalogLoading}
+            projects={projects}
+            selectedProjectCode={selectedProjectCode}
+            onSelectProjectCode={setSelectedProjectCode}
+            isProjectsLoading={isProjectsLoading}
+          />
 
           <ComputeWorkerSection
             available={computeWorkerAvailable}
@@ -515,7 +536,14 @@ export default function Settings() {
         {/* TAB: Analyzers & Parsers */}
         <TabsContent value="adapters" className="space-y-6 mt-0">
           <AdaptersSection adapters={adapterList} isLoading={isAnalyzerCatalogLoading} />
-          <DocumentParsersSection parsers={parserCatalog || []} isLoading={isParserCatalogLoading} />
+          <DocumentParsersSection
+            parsers={parserCatalog || []}
+            isLoading={isParserCatalogLoading}
+            projects={projects}
+            selectedProjectCode={selectedProjectCode}
+            onSelectProjectCode={setSelectedProjectCode}
+            isProjectsLoading={isProjectsLoading}
+          />
         </TabsContent>
 
         {/* TAB: Compute Worker AI */}
@@ -915,13 +943,21 @@ function AdaptersSection({
 function DocumentParsersSection({
   parsers,
   isLoading,
+  projects = [],
+  selectedProjectCode = '',
+  onSelectProjectCode,
+  isProjectsLoading = false,
 }: {
   parsers: DocumentParserCatalogEntry[];
   isLoading: boolean;
+  projects?: Project[];
+  selectedProjectCode?: string;
+  onSelectProjectCode?: (code: string) => void;
+  isProjectsLoading?: boolean;
 }) {
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-lg font-semibold tracking-tight text-foreground flex items-center gap-2">
             <FileText className="h-4 w-4 text-primary" />
@@ -930,8 +966,37 @@ function DocumentParsersSection({
           <p className="text-xs text-muted-foreground">
             Backend-declared documentation formats, single-owner dispatch, and CAS chunkers configured for Document RAG.
           </p>
+          {selectedProjectCode && parsers[0]?.indexedSnapshotReadiness?.snapshotId && (
+            <div className="text-[11px] font-mono text-muted-foreground mt-1 flex items-center gap-2">
+              <Badge variant="secondary" className="text-[10px] font-normal uppercase">
+                {parsers[0].indexedSnapshotReadiness.pipeline ?? 'mixed'} pipeline
+              </Badge>
+              <span>Snapshot: {parsers[0].indexedSnapshotReadiness.snapshotId}</span>
+            </div>
+          )}
         </div>
-        <div className="hidden sm:flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {onSelectProjectCode && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-muted-foreground whitespace-nowrap">Project Scope:</span>
+              <Select
+                value={selectedProjectCode || '__global__'}
+                onValueChange={(val) => onSelectProjectCode(val === '__global__' ? '' : val)}
+              >
+                <SelectTrigger className="h-8 w-[220px] text-xs bg-background">
+                  <SelectValue placeholder="Global (System View)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__global__">Global (System View)</SelectItem>
+                  {projects.map((p) => (
+                    <SelectItem key={p.code} value={p.code}>
+                      {p.name || p.code} ({p.code})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <Badge variant="outline" className="text-xs bg-muted/40 font-mono">
             {parsers.length} Parsers Configured
           </Badge>
@@ -946,8 +1011,8 @@ function DocumentParsersSection({
               <TableHead className="w-[120px]">Capability</TableHead>
               <TableHead className="w-[200px]">Extensions</TableHead>
               <TableHead>Ingestion Extraction Role</TableHead>
-              <TableHead className="w-[130px]">Service State</TableHead>
-              <TableHead className="w-[130px] text-right">Snapshot Readiness</TableHead>
+              <TableHead className="w-[130px]" title="Backend parser service and compute-worker availability">Service State</TableHead>
+              <TableHead className="w-[160px] text-right" title="Coverage of indexed document embeddings in the selected snapshot">Snapshot Readiness</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -1050,30 +1115,58 @@ function DocumentParsersSection({
                     </TableCell>
                     <TableCell className="text-right">
                       {readinessState === 'ready' ? (
-                        <span
-                          className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400"
-                          title={counts ? `${counts.totalEmbedded ?? counts.totalParsed ?? 0} indexed` : undefined}
-                        >
-                          <CheckCircle2 className="h-3 w-3" /> Ready
-                        </span>
+                        <div className="flex flex-col items-end">
+                          <span
+                            className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400"
+                            title={counts ? `${counts.totalEmbedded ?? counts.totalParsed ?? 0} indexed embeddings across ${counts.totalParsed ?? 0} parsed files` : undefined}
+                          >
+                            <CheckCircle2 className="h-3 w-3" /> Ready
+                          </span>
+                          {counts?.totalEmbedded !== undefined && counts.totalEmbedded > 0 && (
+                            <span className="text-[10px] text-muted-foreground font-mono">
+                              {counts.totalEmbedded.toLocaleString()} indexed
+                            </span>
+                          )}
+                        </div>
                       ) : readinessState === 'partial' ? (
-                        <span
-                          className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-600 dark:text-amber-400"
-                          title={partialReasons?.join(', ')}
-                        >
-                          <AlertCircle className="h-3 w-3" /> Partial
-                        </span>
+                        <div className="flex flex-col items-end">
+                          <span
+                            className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-600 dark:text-amber-400"
+                            title={partialReasons?.join(', ')}
+                          >
+                            <AlertCircle className="h-3 w-3" /> Partial
+                          </span>
+                          {counts?.totalParsed !== undefined && (
+                            <span className="text-[10px] text-muted-foreground font-mono">
+                              {counts.totalParsed} / {counts.totalEligible ?? counts.totalParsed} parsed
+                            </span>
+                          )}
+                        </div>
                       ) : readinessState === 'unavailable' ? (
                         <span
                           className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground"
                           title={readinessReason || 'Snapshot not ready'}
                         >
-                          <XCircle className="h-3 w-3" /> Unavailable
+                          <XCircle className="h-3 w-3" /> {readinessReason === 'no_eligible_documents' ? 'No Eligible Docs' : 'Unavailable'}
+                        </span>
+                      ) : readinessReason === 'no_snapshot_selected' ? (
+                        <span
+                          className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground"
+                          title="Snapshot readiness evaluates a specific ingested snapshot. Select a project above to inspect snapshot readiness."
+                        >
+                          <MinusCircle className="h-3 w-3" /> No Snapshot Selected
+                        </span>
+                      ) : readinessReason === 'snapshot_building' ? (
+                        <span
+                          className="inline-flex items-center gap-1 text-[11px] font-medium text-sky-600 dark:text-sky-400"
+                          title="Snapshot is actively building"
+                        >
+                          <Loader2 className="h-3 w-3 animate-spin" /> Ingesting...
                         </span>
                       ) : (
                         <span
                           className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground"
-                          title={readinessReason || 'No snapshot selected'}
+                          title={readinessReason || 'Unverified'}
                         >
                           <HelpCircle className="h-3 w-3" /> Unverified
                         </span>

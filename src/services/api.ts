@@ -303,6 +303,9 @@ export interface DocumentParserServiceAvailability {
 export interface DocumentParserSnapshotReadiness {
   readonly state: 'ready' | 'partial' | 'unavailable' | 'unverified';
   readonly reason?: string;
+  readonly projectCode?: string;
+  readonly snapshotId?: string;
+  readonly pipeline?: SnapshotPipeline | 'mixed' | string;
   readonly counts?: {
     readonly totalEligible?: number;
     readonly totalParsed?: number;
