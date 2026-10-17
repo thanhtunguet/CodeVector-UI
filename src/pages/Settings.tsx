@@ -255,32 +255,34 @@ export default function Settings() {
   // The backend owns analyzer metadata; capabilities supply the live level and availability.
   const adapterList = useMemo(() => {
     const serverAdapters = capabilities?.server?.adapters || [];
-    return (analyzerCatalog || []).map((analyzer: AnalyzerCatalogEntry) => {
-      const languages = new Set(analyzer.languages.map((language) => language.toLowerCase()));
-      const matchingCapabilities = serverAdapters.filter((entry) =>
-        languages.has(entry.language.toLowerCase())
-      );
-      const levels = matchingCapabilities
-        .map((entry) => entry.level || entry.capability)
-        .filter((level): level is string => Boolean(level));
-      const level = levels.includes('text')
-        ? 'text'
-        : levels.includes('syntax')
-          ? 'syntax'
-          : levels[0] || analyzer.defaultLevel;
-      return {
-        id: analyzer.id,
-        name: analyzer.name,
-        level: level as
-          | 'syntax'
-          | 'semantic'
-          | 'text',
-        extensions: analyzer.extensions,
-        description: analyzer.description,
-        available: matchingCapabilities.every((entry) => entry.available !== false),
-        Icon: ANALYZER_ICONS[analyzer.icon] || FileCode,
-      };
-    });
+    return (analyzerCatalog || [])
+      .map((analyzer: AnalyzerCatalogEntry) => {
+        const languages = new Set(analyzer.languages.map((language) => language.toLowerCase()));
+        const matchingCapabilities = serverAdapters.filter((entry) =>
+          languages.has(entry.language.toLowerCase())
+        );
+        const levels = matchingCapabilities
+          .map((entry) => entry.level || entry.capability)
+          .filter((level): level is string => Boolean(level));
+        const level = levels.includes('text')
+          ? 'text'
+          : levels.includes('syntax')
+            ? 'syntax'
+            : levels[0] || analyzer.defaultLevel;
+        return {
+          id: analyzer.id,
+          name: analyzer.name,
+          level: level as
+            | 'syntax'
+            | 'semantic'
+            | 'text',
+          extensions: analyzer.extensions,
+          description: analyzer.description,
+          available: matchingCapabilities.every((entry) => entry.available !== false),
+          Icon: ANALYZER_ICONS[analyzer.icon] || FileCode,
+        };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
   }, [analyzerCatalog, capabilities?.server?.adapters]);
 
   // Overall probe statistics

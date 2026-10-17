@@ -87,7 +87,7 @@ export function cacheParserCatalog(catalog: DocumentParserCatalogEntry[]): void 
   }
 }
 
-function isAnalyzerCatalogEntry(value: unknown): value is AnalyzerCatalogEntry {
+export function isAnalyzerCatalogEntry(value: unknown): value is AnalyzerCatalogEntry {
   if (!value || typeof value !== 'object') return false;
   const entry = value as Record<string, unknown>;
   return (
@@ -101,20 +101,22 @@ function isAnalyzerCatalogEntry(value: unknown): value is AnalyzerCatalogEntry {
   );
 }
 
-function readCachedAnalyzerCatalog(): AnalyzerCatalogEntry[] | undefined {
+export function readCachedAnalyzerCatalog(): AnalyzerCatalogEntry[] | undefined {
   try {
+    if (typeof window === 'undefined' || !window.localStorage) return undefined;
     const serialized = window.localStorage.getItem(ANALYZER_CATALOG_STORAGE_KEY);
     if (!serialized) return undefined;
     const parsed: unknown = JSON.parse(serialized);
     if (!Array.isArray(parsed) || !parsed.every(isAnalyzerCatalogEntry)) return undefined;
-    return parsed;
+    return [...parsed].sort((a, b) => a.name.localeCompare(b.name));
   } catch {
     return undefined;
   }
 }
 
-function cacheAnalyzerCatalog(catalog: AnalyzerCatalogEntry[]): void {
+export function cacheAnalyzerCatalog(catalog: AnalyzerCatalogEntry[]): void {
   try {
+    if (typeof window === 'undefined' || !window.localStorage) return;
     window.localStorage.setItem(ANALYZER_CATALOG_STORAGE_KEY, JSON.stringify(catalog));
   } catch {
     // Settings still works when storage is disabled, full, or unavailable.
@@ -129,8 +131,9 @@ export function useAnalyzerCatalog() {
       if (!Array.isArray(catalog) || !catalog.every(isAnalyzerCatalogEntry)) {
         throw new Error('The analyzer catalog response was invalid');
       }
-      cacheAnalyzerCatalog(catalog);
-      return catalog;
+      const sortedCatalog = [...catalog].sort((a, b) => a.name.localeCompare(b.name));
+      cacheAnalyzerCatalog(sortedCatalog);
+      return sortedCatalog;
     },
     initialData: readCachedAnalyzerCatalog,
     initialDataUpdatedAt: 0,
