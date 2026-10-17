@@ -3,10 +3,12 @@ import {
   getAnalyzers,
   getCapabilities,
   getDocumentParsers,
+  getEncodings,
   getSystemHealth,
   type AnalyzerCatalogEntry,
   type CapabilitiesReport,
   type DocumentParserCatalogEntry,
+  type EncodingCatalog,
   type SystemHealthReport,
 } from '@/services/api';
 
@@ -139,6 +141,43 @@ export function useAnalyzerCatalog() {
     initialDataUpdatedAt: 0,
     refetchOnMount: 'always',
     staleTime: 60 * 1000,
+    retry: 1,
+  });
+}
+
+export function isEncodingCatalog(value: unknown): value is EncodingCatalog {
+  if (!value || typeof value !== 'object') return false;
+  const catalog = value as Record<string, unknown>;
+  return (
+    Array.isArray(catalog.encodings) &&
+    catalog.encodings.every((entry) => {
+      if (!entry || typeof entry !== 'object') return false;
+      const e = entry as Record<string, unknown>;
+      return (
+        typeof e.name === 'string' &&
+        (e.family === 'utf8' || e.family === 'utf16' || e.family === 'utf32' || e.family === 'legacy') &&
+        typeof e.multiByte === 'boolean'
+      );
+    }) &&
+    typeof catalog.detector === 'string' &&
+    typeof catalog.defaultConfidenceThreshold === 'number' &&
+    Number.isFinite(catalog.defaultConfidenceThreshold) &&
+    typeof catalog.undetectableRemedy === 'string'
+  );
+}
+
+/** Supported source encodings (GET /encodings); drives the encoding policy editor. */
+export function useEncodingCatalog() {
+  return useQuery<EncodingCatalog>({
+    queryKey: ['encoding-catalog'],
+    queryFn: async () => {
+      const catalog = await getEncodings();
+      if (!isEncodingCatalog(catalog)) {
+        throw new Error('The encoding catalog response was invalid');
+      }
+      return catalog;
+    },
+    staleTime: 5 * 60 * 1000,
     retry: 1,
   });
 }

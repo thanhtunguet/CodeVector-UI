@@ -82,6 +82,7 @@ import {
 import { useProjects } from '@/hooks/useProjects';
 import { useToast } from '@/hooks/use-toast';
 import { WorkerEventPanel } from '@/components/worker/WorkerEventPanel';
+import { SourceEncodingSection } from '@/components/settings/SourceEncodingSection';
 import type {
   AnalyzerCatalogEntry,
   DependencyProbeReport,
@@ -468,7 +469,7 @@ export default function Settings() {
 
       {/* Tabs Navigation */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid grid-cols-2 md:grid-cols-5 w-full md:w-auto h-auto p-1 bg-muted/60">
+        <TabsList className="grid grid-cols-2 md:grid-cols-6 w-full md:w-auto h-auto p-1 bg-muted/60">
           <TabsTrigger value="overview" className="text-xs py-1.5">
             Full Overview
           </TabsTrigger>
@@ -477,6 +478,9 @@ export default function Settings() {
           </TabsTrigger>
           <TabsTrigger value="adapters" className="text-xs py-1.5">
             Analyzers & Parsers
+          </TabsTrigger>
+          <TabsTrigger value="encoding" className="text-xs py-1.5">
+            Source Encoding
           </TabsTrigger>
           <TabsTrigger value="compute" className="text-xs py-1.5">
             Compute AI Worker
@@ -541,6 +545,16 @@ export default function Settings() {
           <DocumentParsersSection
             parsers={parserCatalog || []}
             isLoading={isParserCatalogLoading}
+            projects={projects}
+            selectedProjectCode={selectedProjectCode}
+            onSelectProjectCode={setSelectedProjectCode}
+            isProjectsLoading={isProjectsLoading}
+          />
+        </TabsContent>
+
+        {/* TAB: Source Encoding */}
+        <TabsContent value="encoding" className="space-y-6 mt-0">
+          <SourceEncodingSection
             projects={projects}
             selectedProjectCode={selectedProjectCode}
             onSelectProjectCode={setSelectedProjectCode}

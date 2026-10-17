@@ -13,6 +13,32 @@ export type SourceLocator =
   | { type: 'local_directory'; path: string }
   | { type: string; [key: string]: unknown };
 
+/** One explicit encoding for matching paths. Exactly one of extension|glob|path is set. */
+export interface EncodingOverrideRule {
+  encoding: string;
+  extension?: string;
+  glob?: string;
+  path?: string;
+}
+
+/**
+ * Per-source legacy-encoding policy. Applies to the NEXT ingestion only; running
+ * operations keep their frozen policy and existing snapshots are not changed.
+ */
+export interface SourceEncodingPolicy {
+  version: '1';
+  /** Server default: true. */
+  autoGuessEncoding?: boolean;
+  /** Server default: true (ignored when autoGuessEncoding is false). */
+  siblingEncodingConsensus?: boolean;
+  /** Empty or absent: every supported encoding. */
+  candidateGuessEncodings?: string[];
+  /** Precedence: path, then glob, then extension; first in list wins within a kind. */
+  encodingOverrides?: EncodingOverrideRule[];
+  /** In (0, 1]. Server default: 0.2. */
+  encodingConfidenceThreshold?: number;
+}
+
 export interface Source {
   id: string;
   projectCode: string;
@@ -20,6 +46,35 @@ export interface Source {
   name: string;
   locator: SourceLocator;
   createdAt: string;
+  encodingPolicy?: SourceEncodingPolicy | null;
+}
+
+export type EncodingDetectionMethod = 'bom' | 'utf16-nul' | 'guess' | 'override' | 'sibling';
+
+export interface RevisionEncodingFile {
+  path: string;
+  encoding: string;
+  method?: EncodingDetectionMethod;
+  confidence?: number;
+}
+
+export interface RevisionEncodingUndetectable {
+  count: number;
+  countExact: boolean;
+  sample: { path: string; message?: string }[];
+  remedy: string;
+}
+
+/** Legacy-encoding report of one pinned source revision; absent for a UTF-8-only capture. */
+export interface RevisionEncodingReport {
+  /** Captured files per non-UTF-8 encoding. */
+  counts: Record<string, number>;
+  /** Capped sample sorted by path. */
+  files: RevisionEncodingFile[];
+  filesTruncated: boolean;
+  undetectable?: RevisionEncodingUndetectable;
+  /** Policy that was used for that capture. */
+  policy?: SourceEncodingPolicy;
 }
 
 export interface SnapshotRevision {
@@ -28,6 +83,7 @@ export interface SnapshotRevision {
   revision: string;
   manifestHash: string;
   fileCount: number;
+  encoding?: RevisionEncodingReport;
 }
 
 export type IngestionPipeline = 'source' | 'docs';
@@ -434,6 +490,7 @@ export interface CreateSourceInput {
   name: string;
   kind: 'repository' | 'documentation';
   locator: { type: 'local_directory'; path: string };
+  encodingPolicy?: SourceEncodingPolicy;
 }
 
 export async function createSource(
@@ -454,6 +511,26 @@ export async function getProjectSources(code: string): Promise<Source[]> {
     `${BASE_URL}/projects/${encodeURIComponent(code)}/sources`
   );
   return data.sources;
+}
+
+/**
+ * Replaces (or, with `null`, clears) the source's encoding policy. The change applies to
+ * the next ingestion only. Invalid input is HTTP 400 `{ error, code: 'invalid_input' }`;
+ * `requestJson` surfaces the server's `error` text as the thrown message.
+ */
+export async function updateSourceEncodingPolicy(
+  code: string,
+  sourceId: string,
+  encodingPolicy: SourceEncodingPolicy | null
+): Promise<Source> {
+  return requestJson<Source>(
+    `${BASE_URL}/projects/${encodeURIComponent(code)}/sources/${encodeURIComponent(sourceId)}`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ encodingPolicy }),
+    }
+  );
 }
 
 export async function getProjectSnapshots(code: string, pipeline?: SnapshotPipeline): Promise<Snapshot[]> {
@@ -715,6 +792,12 @@ export interface EntityDetailResponse {
 }
 
 export interface EvidenceResult {
+  /**
+   * `startByte`/`endByte` are offsets in the original stored bytes. `encoding` is the
+   * encoding of those bytes (`utf-8` unless the file was captured in another
+   * encoding); `text` is always UTF-8.
+   */
+  range?: { startByte: number; endByte: number; encoding: string; convention: 'half-open'; exact: true };
   projectCode: string;
   snapshotId: string;
   sourceId: string;
@@ -722,6 +805,8 @@ export interface EvidenceResult {
   path: string;
   contentHash: string;
   byteSize: number;
+  /** Encoding of the stored bytes; absent means UTF-8. */
+  sourceEncoding?: string;
   text: string;
 }
 
@@ -772,6 +857,25 @@ export async function getEvidence(
 
 export async function getCapabilities(): Promise<CapabilitiesReport> {
   return requestJson<CapabilitiesReport>(`${BASE_URL}/capabilities`);
+}
+
+export type EncodingFamily = 'utf8' | 'utf16' | 'utf32' | 'legacy';
+
+export interface EncodingCatalogEntry {
+  name: string;
+  family: EncodingFamily;
+  multiByte: boolean;
+}
+
+export interface EncodingCatalog {
+  encodings: EncodingCatalogEntry[];
+  detector: string;
+  defaultConfidenceThreshold: number;
+  undetectableRemedy: string;
+}
+
+export async function getEncodings(): Promise<EncodingCatalog> {
+  return requestJson<EncodingCatalog>(`${BASE_URL}/encodings`);
 }
 
 export async function getAnalyzers(): Promise<AnalyzerCatalogEntry[]> {

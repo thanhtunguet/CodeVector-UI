@@ -14,6 +14,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useProjectSnapshot } from "@/hooks/useProjects";
 import { WorkerEventPanel } from "@/components/worker/WorkerEventPanel";
 import { SnapshotReadinessDisplay } from "./SnapshotReadinessDisplay";
+import { RevisionEncodingBlock } from "./RevisionEncodingBlock";
 import type { Snapshot } from "@/services/api";
 import { format } from "date-fns";
 import {
@@ -308,6 +309,7 @@ export function SnapshotDetailSheet({
                               <span className="truncate">{rev.manifestHash}</span>
                             </div>
                           )}
+                          <RevisionEncodingBlock encoding={rev.encoding} />
                         </div>
                       ))}
                     </div>

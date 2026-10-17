@@ -10,6 +10,7 @@ import {
   getProjectSnapshot,
   getProjectSnapshots,
   getProjectSources,
+  updateSourceEncodingPolicy,
   searchProject,
   triggerIngest,
   updateProject,
@@ -24,6 +25,7 @@ import {
   type Snapshot,
   type SnapshotPipeline,
   type Source,
+  type SourceEncodingPolicy,
 } from '@/services/api';
 import { ingestionKeys } from './ingestionQueries';
 
@@ -93,6 +95,22 @@ export function useCreateSource() {
   const queryClient = useQueryClient();
   return useMutation<Source, Error, { code: string; input: CreateSourceInput }>({
     mutationFn: ({ code, input }) => createSource(code, input),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['projects', variables.code, 'sources'] });
+    },
+  });
+}
+
+/** Saves (or with `null` clears) a source's encoding policy; applies to the next ingestion only. */
+export function useUpdateSourceEncodingPolicy() {
+  const queryClient = useQueryClient();
+  return useMutation<
+    Source,
+    Error,
+    { code: string; sourceId: string; encodingPolicy: SourceEncodingPolicy | null }
+  >({
+    mutationFn: ({ code, sourceId, encodingPolicy }) =>
+      updateSourceEncodingPolicy(code, sourceId, encodingPolicy),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['projects', variables.code, 'sources'] });
     },

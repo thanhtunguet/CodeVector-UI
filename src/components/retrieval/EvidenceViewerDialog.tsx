@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useEvidence } from "@/hooks/useRetrieval";
 import {
   FileCode,
@@ -21,6 +22,7 @@ import {
   Layers,
   HardDrive,
   Hash,
+  Languages,
 } from "lucide-react";
 
 export interface EvidenceViewerDialogProps {
@@ -195,6 +197,27 @@ export function EvidenceViewerDialog({
                   <Hash className="h-3 w-3 text-muted-foreground" />
                   {lines.length} lines
                 </Badge>
+                {evidence.sourceEncoding && (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Badge
+                          variant="outline"
+                          data-testid="evidence-source-encoding"
+                          className="gap-1 border-amber-500/60 font-mono text-[11px]"
+                        >
+                          <Languages className="h-3 w-3 text-muted-foreground" />
+                          {evidence.sourceEncoding}
+                        </Badge>
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-xs text-xs">
+                        The stored file is encoded as {evidence.sourceEncoding}. The text shown is converted to
+                        UTF-8; byte offsets and the size above refer to the original bytes in{" "}
+                        {evidence.sourceEncoding}.
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
                 {evidence.sourceId && (
                   <Badge variant="outline" className="gap-1 text-[11px]">
                     <Layers className="h-3 w-3 text-muted-foreground" />
